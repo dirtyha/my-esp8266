@@ -45,7 +45,7 @@ Vallox::Vallox(byte rx, byte tx) {
 
 Vallox::Vallox(byte rx, byte tx, boolean debug) {
   serial = new SoftwareSerial(rx, tx);
-  isDebug = debug;  
+  isDebug = debug;
 }
 
 vx_data* Vallox::init() {
@@ -58,7 +58,7 @@ vx_data* Vallox::init() {
   data.t_outbound = NOT_SET;  // read only
   data.t_inbound =  NOT_SET;  // read only
   data.fan_speed =  getFanSpeed();
-  data.power = getPower();
+  data.is_on = isOn();
 
   return &data;
 }
@@ -69,7 +69,7 @@ vx_data* Vallox::loop() {
   // read and decode all available messages
   while (readMessage(message)) {
     decodeMessage(message);
-    if(isDebug) {
+    if (isDebug) {
       prettyPrint(message);
     }
   }
@@ -79,7 +79,15 @@ vx_data* Vallox::loop() {
 
 // setters
 void Vallox::setFanSpeed(int speed) {
-  setVariable(VX_VARIABLE_FAN_SPEED, fanSpeed2Hex(speed));
+  if (speed < 9) {
+    setVariable(VX_VARIABLE_FAN_SPEED, fanSpeed2Hex(speed));
+  }
+}
+
+void Vallox::setDefaultFanSpeed(int speed) {
+  if (speed < 9) {
+    setVariable(VX_VARIABLE_DEFAULT_FAN_SPEED, fanSpeed2Hex(speed));
+  }
 }
 
 void Vallox::setOn() {
@@ -92,15 +100,102 @@ void Vallox::setOff() {
   setVariable(VX_VARIABLE_STATUS, status & ~VX_STATUS_FLAG_POWER);
 }
 
+void Vallox::setCO2Mode() {
+  byte status = getVariable(VX_VARIABLE_STATUS);
+  setVariable(VX_VARIABLE_STATUS, status | VX_STATUS_FLAG_CO2);
+}
+
+void Vallox::setRHMode() {
+  byte status = getVariable(VX_VARIABLE_STATUS);
+  setVariable(VX_VARIABLE_STATUS, status | VX_STATUS_FLAG_RH);
+}
+
+void Vallox::setHeatingMode() {
+  byte status = getVariable(VX_VARIABLE_STATUS);
+  setVariable(VX_VARIABLE_STATUS, status | VX_STATUS_FLAG_HEATING_MODE);
+}
+
+void Vallox::setServicePeriod(int months) {
+  if (months < 256) {
+    setVariable(VX_VARIABLE_SERVICE_PERIOD, months);
+  }
+}
+
+void Vallox::setServiceCounter(int months) {
+  if (months < 256) {
+    setVariable(VX_VARIABLE_SERVICE_COUNTER, months);
+  }
+}
+
+void Vallox::setHeatingTarget(int cel) {
+  if (cel < 20) {
+    byte ntc = cel2Ntc(cel);
+    setVariable(VX_VARIABLE_HEATING_TARGET, ntc);
+  }
+}
+
 // getters
 int Vallox::getFanSpeed() {
   byte speed = getVariable(VX_VARIABLE_FAN_SPEED);
   return hex2FanSpeed(speed);
 }
 
-boolean Vallox::getPower() {
+int Vallox::getDefaultFanSpeed() {
+  byte speed = getVariable(VX_VARIABLE_DEFAULT_FAN_SPEED);
+  return hex2FanSpeed(speed);
+}
+
+boolean Vallox::isOn() {
   byte status = getVariable(VX_VARIABLE_STATUS);
-  return status | VX_STATUS_FLAG_POWER;
+  return status & VX_STATUS_FLAG_POWER;
+}
+
+boolean Vallox::isCO2Mode() {
+  byte status = getVariable(VX_VARIABLE_STATUS);
+  return status & VX_STATUS_FLAG_CO2;
+}
+
+boolean Vallox::isRHMode() {
+  byte status = getVariable(VX_VARIABLE_STATUS);
+  return status & VX_STATUS_FLAG_RH;
+}
+
+boolean Vallox::isHeatingMode() {
+  byte status = getVariable(VX_VARIABLE_STATUS);
+  return status & VX_STATUS_FLAG_HEATING_MODE;
+}
+
+boolean Vallox::isSummerMode() {
+  byte io = getVariable(VX_VARIABLE_IO_08);
+  return io & 0x02;
+}
+
+boolean Vallox::isFilter() {
+  byte status = getVariable(VX_VARIABLE_STATUS);
+  return status & VX_STATUS_FLAG_FILTER;
+}
+
+boolean Vallox::isHeating() {
+  byte status = getVariable(VX_VARIABLE_STATUS);
+  return status & VX_STATUS_FLAG_HEATING;
+}
+
+boolean Vallox::isFault() {
+  byte status = getVariable(VX_VARIABLE_STATUS);
+  return status & VX_STATUS_FLAG_FAULT;
+}
+
+boolean Vallox::isService() {
+  byte status = getVariable(VX_VARIABLE_STATUS);
+  return status & VX_STATUS_FLAG_SERVICE;
+}
+
+int Vallox::getServicePeriod() {
+  return getVariable(VX_VARIABLE_SERVICE_PERIOD);
+}
+
+int Vallox::getServiceCounter() {
+  return getVariable(VX_VARIABLE_SERVICE_COUNTER);
 }
 
 // set variable value in mainboards and panels
@@ -190,7 +285,7 @@ boolean Vallox::readMessage(byte message[]) {
   return ret;
 }
 
-void Vallox::decodeMessage(byte message[]) {
+void Vallox::decodeMessage(const byte message[]) {
   // decode variable in message
   byte variable = message[3];
   byte value = message[4];
@@ -225,8 +320,19 @@ int Vallox::ntc2Cel(byte b) {
   return vxTemps[i];
 }
 
-byte Vallox::fanSpeed2Hex(int val) {
-  return vxFanSpeeds[val - 1];
+byte Vallox::cel2Ntc(int cel) {
+  for (int i = 0; i < 256; i++) {
+    if(vxTemps[i] == cel) {
+      return i;
+    }
+  }
+
+  // we should not be here, return 10 Cel as default
+  return 0x83;
+}
+
+byte Vallox::fanSpeed2Hex(int fan) {
+  return vxFanSpeeds[fan - 1];
 }
 
 int Vallox::hex2FanSpeed(byte b) {
@@ -251,8 +357,8 @@ byte Vallox::calculateCheckSum(const byte message[]) {
 
 void Vallox::prettyPrint(const byte message[]) {
   Serial.print("MSG: ");
-  for(int i = 0;i < VX_MSG_LENGTH;i++) {
-    Serial.print(message[i], HEX);Serial.print(" ");
+  for (int i = 0; i < VX_MSG_LENGTH; i++) {
+    Serial.print(message[i], HEX); Serial.print(" ");
   }
   Serial.println();
 }

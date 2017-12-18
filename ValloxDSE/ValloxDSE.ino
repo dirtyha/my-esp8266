@@ -121,8 +121,8 @@ void publishData(vx_data* data) {
     d["SPEED"] = data->fan_speed;
   }
 
-  if (vxIsSet(data->power)) {
-    d["POWER"] = data->power;
+  if (vxIsSet(data->is_on)) {
+    d["ON"] = data->is_on;
   }
 
   char buff[JSON_BUFFER_LENGTH];
