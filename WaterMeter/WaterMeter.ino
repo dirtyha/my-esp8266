@@ -130,6 +130,7 @@ void wifiConnect() {
     delay(500);
     Serial.print(".");
   }
+  WiFi.mode(WIFI_STA);
   Serial.print("WiFi connected, IP address: "); Serial.println(WiFi.localIP());
 }
 
