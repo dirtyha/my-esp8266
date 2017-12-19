@@ -2,6 +2,9 @@
 // VALLOX DIGIT SE COMMUNICATION PROTOCOL
 // =======================================
 
+#ifndef VALLOX_H
+#define VALLOX_H
+
 #include <Arduino.h>
 #include <SoftwareSerial.h>
 
@@ -40,38 +43,29 @@
 #define VX_STATUS_FLAG_FAULT 0x40           // bit 6 read
 #define VX_STATUS_FLAG_SERVICE 0x80         // bit 7 read             
 
-// measured data from ValloxDSE
-typedef struct {
-  unsigned long updated;
-
-  boolean is_on;
-  boolean is_rh_mode;
-  boolean is_heating_mode;
-  boolean is_summer_mode;
-  boolean is_filter;
-  boolean is_heating;
-  boolean is_fault;
-  boolean is_service;
-
-  int t_outside;
-  int t_inside;
-  int t_outbound;
-  int t_inbound;
-
-  int fan_speed;
-  int default_fan_speed;
-  int rh;
-  int service_period;
-  int service_counter;
-  int heating_target;
-} vx_data;
+// fan speeds
+#define VX_FAN_SPEED_1 0x01
+#define VX_FAN_SPEED_2 0x03
+#define VX_FAN_SPEED_3 0x07
+#define VX_FAN_SPEED_4 0x0F
+#define VX_FAN_SPEED_5 0x1F
+#define VX_FAN_SPEED_6 0x3F
+#define VX_FAN_SPEED_7 0x7F
+#define VX_FAN_SPEED_8 0xFF
+#define VX_MIN_FAN_SPEED 1
+#define VX_MAX_FAN_SPEED 8
 
 class Vallox {
   public:
     Vallox(byte rx, byte tx);
     Vallox(byte rx, byte tx, boolean isDebug);
 
-    // getters
+    // get data from memory
+    unsigned long getUpdated(); // time when data was updated
+    int getInsideTemp();
+    int getOutsideTemp();
+    int getIncomingTemp();
+    int getExhaustTemp();
     boolean isOn();
     boolean isRHMode();
     boolean isHeatingMode();
@@ -88,7 +82,7 @@ class Vallox {
     int getHeatingTarget();
     byte getVariable(byte variable);
 
-    // setters
+    // set data in Vallox bus
     void setFanSpeed(int speed);
     void setDefaultFanSpeed(int speed);
     void setOn();
@@ -100,21 +94,64 @@ class Vallox {
     void setHeatingTarget(int temp);
     void setVariable(byte variable, byte value);
 
-    // read and decode messages
-    vx_data* init();
-    vx_data* loop();
+    // initialize data - this polls and inits all data
+    void init();
+    // listen bus for data that arrives without polling
+    void loop();
 
   private:
     SoftwareSerial* serial;
     boolean isDebug = false;
-    vx_data data;
+    
+    // measured data from ValloxDSE
+    struct {
+      unsigned long updated;
+
+      boolean is_on;
+      boolean is_rh_mode;
+      boolean is_heating_mode;
+      boolean is_summer_mode;
+      boolean is_filter;
+      boolean is_heating;
+      boolean is_fault;
+      boolean is_service;
+
+      int t_outside;
+      int t_inside;
+      int t_exhaust;
+      int t_incoming;
+
+      int fan_speed;
+      int default_fan_speed;
+      int rh;
+      int service_period;
+      int service_counter;
+      int heating_target;
+    } data;
+
+    // pollers
+    boolean pollIsOn();
+    boolean pollIsRHMode();
+    boolean pollIsHeatingMode();
+    boolean pollIsSummerMode();
+    boolean pollIsFilter();
+    boolean pollIsHeating();
+    boolean pollIsFault();
+    boolean pollIsService();
+    int pollFanSpeed();
+    int pollDefaultFanSpeed();
+    int pollRH();
+    int pollServicePeriod();
+    int pollServiceCounter();
+    int pollHeatingTarget();
+    byte pollVariable(byte variable);
 
     // conversions
     static byte fanSpeed2Hex(int fan);
     static int hex2FanSpeed(byte hex);
     static int ntc2Cel(byte ntc);
     static byte cel2Ntc(int cel);
-    static int hex2RH(byte hex);
+    static int hex2Rh(byte hex);
 
     // read and decode messages
     boolean readMessage(byte message[]);
@@ -129,4 +166,5 @@ class Vallox {
 // helpers
 boolean vxIsSet(int value);
 
+#endif
 

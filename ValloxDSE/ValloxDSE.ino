@@ -5,8 +5,8 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <Vallox.h>
 #include "xCredentials.h"
-#include "xVallox.h"
 
 #define DEVICE_TYPE "VentillationMachine"
 #define JSON_BUFFER_LENGTH 300
@@ -31,8 +31,8 @@ void setup() {
   Serial.begin(9600);
 
   wifiConnect();
-  vx_data* data = vx.init();
-  lastUpdated = data->updated;
+  vx.init();
+  lastUpdated = vx.getUpdated();
   mqttConnect();
 
   Serial.println("Setup done.");
@@ -41,29 +41,31 @@ void setup() {
 void loop() {
 
   // loop VX messages
-  vx_data* data = vx.loop();
+  vx.loop();
 
   // check that we are connected
   if (!client.loop()) {
     mqttConnect();
   }
 
-  if (lastUpdated != data->updated) {
+  unsigned long newUpdate = vx.getUpdated();
+  if (lastUpdated != newUpdate) {
     // data hash changed
-    publishData(data);
-    lastUpdated = data->updated;
-    if(DEBUG) {
-      prettyPrint(data);
+    if (publishData()) {
+      lastUpdated = newUpdate;
+    }
+    if (DEBUG) {
+      prettyPrint();
     }
   }
 }
 
-void prettyPrint(vx_data* data) {
-  Serial.print("Inside air T="); Serial.print(data->t_inside); Serial.print(", ");
-  Serial.print("Outside air T="); Serial.print(data->t_outside); Serial.print(", ");
-  Serial.print("Inbound air T="); Serial.print(data->t_inbound); Serial.print(", ");
-  Serial.print("Outbound air T="); Serial.print(data->t_outbound); Serial.print(", ");
-  Serial.print("Fan speed="); Serial.print(data->fan_speed);
+void prettyPrint() {
+  Serial.print("Inside air T="); Serial.print(vx.getInsideTemp()); Serial.print(", ");
+  Serial.print("Outside air T="); Serial.print(vx.getOutsideTemp()); Serial.print(", ");
+  Serial.print("Inbound air T="); Serial.print(vx.getIncomingTemp()); Serial.print(", ");
+  Serial.print("Outbound air T="); Serial.print(vx.getExhaustTemp()); Serial.print(", ");
+  Serial.print("Fan speed="); Serial.print(vx.getFanSpeed());
   Serial.println();
 }
 
@@ -81,57 +83,64 @@ void wifiConnect() {
 void mqttConnect() {
   if (!!!client.connected()) {
     Serial.print("Reconnecting MQTT client to "); Serial.println(server);
-    while (!!!client.connect(clientId, authMethod, token)) {
+    int count = 20;
+    while (count-- > 0 && !!!client.connect(clientId, authMethod, token)) {
       Serial.print(".");
       delay(500);
     }
     Serial.println();
 
     if (client.subscribe(updateTopic, 1)) {
-      Serial.println("Subscribe to update OK");
+      if (DEBUG) {
+        Serial.println("Subscribe to update OK");
+      }
     } else {
       Serial.println("Subscribe to update FAILED");
     }
   }
 }
 
-void publishData(vx_data* data) {
+boolean publishData() {
+  boolean ret = true;
+
   StaticJsonBuffer<JSON_BUFFER_LENGTH> jsonBuffer;
   JsonObject& root = jsonBuffer.createObject();
   JsonObject& d = root.createNestedObject("d");
 
-  if (vxIsSet(data->t_inside)) {
-    d["T_IN"] = data->t_inside;
+  if (vxIsSet(vx.getInsideTemp())) {
+    d["T_IN"] = vx.getInsideTemp();
   }
 
-  if (vxIsSet(data->t_outside)) {
-    d["T_OUT"] = data->t_outside;
+  if (vxIsSet(vx.getOutsideTemp())) {
+    d["T_OUT"] = vx.getOutsideTemp();
   }
 
-  if (vxIsSet(data->t_inbound)) {
-    d["T_INB"] = data->t_inbound;
+  if (vxIsSet(vx.getInsideTemp())) {
+    d["T_INB"] = vx.getIncomingTemp();
   }
 
-  if (vxIsSet(data->t_outbound)) {
-    d["T_OUTB"] = data->t_outbound;
+  if (vxIsSet(vx.getExhaustTemp())) {
+    d["T_OUTB"] = vx.getExhaustTemp();
   }
 
-  d["SPEED"] = data->fan_speed;
-  d["ON"] = data->is_on;
-  d["RH_MODE"] = data->is_rh_mode;
-  d["HEATING_MODE"] = data->is_heating_mode;
-  d["SUMMER_MODE"] = data->is_summer_mode;
-  d["HEATING"] = data->is_heating;
-  d["FAULT"] = data->is_fault;
-  d["SERVICE"] = data->is_service;
-  d["SPEED"] = data->fan_speed;
-  d["DEFAULT_SPEED"] = data->default_fan_speed;
-  d["RH"] = data->rh;
-  d["SERVICE_PERIOD"] = data->service_period;
-  d["SERVICE_COUNTER"] = data->service_counter;
-  d["HEATING_TARGET"] = data->heating_target;
+  if (vxIsSet(vx.getRH())) {
+    d["RH"] = vx.getRH();
+  }
 
-  if(DEBUG) {
+  d["ON"] = vx.isOn();
+  d["RH_MODE"] = vx.isRHMode();
+  d["HEATING_MODE"] = vx.isHeatingMode();
+  d["SUMMER_MODE"] = vx.isSummerMode();
+  d["HEATING"] = vx.isHeating();
+  d["FAULT"] = vx.isFault();
+  d["SERVICE"] = vx.isService();
+  d["SPEED"] = vx.getFanSpeed();
+  d["DEFAULT_SPEED"] = vx.getDefaultFanSpeed();
+  d["SERVICE_PERIOD"] = vx.getServicePeriod();
+  d["SERVICE_COUNTER"] = vx.getServiceCounter();
+  d["HEATING_TARGET"] = vx.getHeatingTarget();
+
+  if (DEBUG) {
     Serial.println("Publish payload:"); root.prettyPrintTo(Serial); Serial.println();
   }
 
@@ -139,14 +148,21 @@ void publishData(vx_data* data) {
   root.printTo(buff, JSON_BUFFER_LENGTH);
 
   if (client.publish(publishTopic, buff)) {
-    Serial.println("Publish OK");
+    if (DEBUG) {
+      Serial.println("Publish OK");
+    }
   } else {
     Serial.println("Publish FAILED");
+    ret = false;
   }
+
+  return ret;
 }
 
 void myCallback(char* topic, byte * payload, unsigned int length) {
-  Serial.print("Callback invoked for topic: "); Serial.println(topic);
+  if (DEBUG) {
+    Serial.print("Callback invoked for topic: "); Serial.println(topic);
+  }
 
   if (strcmp (updateTopic, topic) == 0) {
     handleUpdate(payload);
@@ -161,10 +177,10 @@ void handleUpdate(byte * payload) {
     return;
   }
 
-  if(DEBUG) {
+  if (DEBUG) {
     Serial.println("handleUpdate payload:"); root.prettyPrintTo(Serial); Serial.println();
   }
-  
+
   JsonObject& d = root["d"];
   if (d.containsKey("speed")) {
     int speed = d["speed"];
