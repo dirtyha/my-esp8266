@@ -28,8 +28,8 @@
 #define VX_VARIABLE_SERVICE_COUNTER 0xAB
 #define VX_VARIABLE_T_OUTSIDE 0x58
 #define VX_VARIABLE_T_INSIDE 0x5a
-#define VX_VARIABLE_T_OUTBOUND 0x5C
-#define VX_VARIABLE_T_INBOUND 0x5B
+#define VX_VARIABLE_T_EXHAUST 0x5C
+#define VX_VARIABLE_T_INCOMING 0x5B
 #define VX_VARIABLE_IO_08 0x08
 #define VX_VARIABLE_HEATING_TARGET 0xA4
 
@@ -67,7 +67,7 @@ class Vallox {
     int getIncomingTemp();
     int getExhaustTemp();
     boolean isOn();
-    boolean isRHMode();
+    boolean isRhMode();
     boolean isHeatingMode();
     boolean isSummerMode();
     boolean isFilter();
@@ -76,7 +76,7 @@ class Vallox {
     boolean isService();
     int getFanSpeed();
     int getDefaultFanSpeed();
-    int getRH();
+    int getRh();
     int getServicePeriod();
     int getServiceCounter();
     int getHeatingTarget();
@@ -87,8 +87,10 @@ class Vallox {
     void setDefaultFanSpeed(int speed);
     void setOn();
     void setOff();
-    void setRHMode();
-    void setHeatingMode();
+    void setRhModeOn();
+    void setRhModeOff();
+    void setHeatingModeOn();
+    void setHeatingModeOff();
     void setServicePeriod(int months);
     void setServiceCounter(int months);
     void setHeatingTarget(int temp);
@@ -131,16 +133,20 @@ class Vallox {
 
     // pollers
     boolean pollIsOn();
-    boolean pollIsRHMode();
+    boolean pollIsRhMode();
     boolean pollIsHeatingMode();
     boolean pollIsSummerMode();
     boolean pollIsFilter();
     boolean pollIsHeating();
     boolean pollIsFault();
     boolean pollIsService();
+	int pollInsideTemp();
+	int pollOutsideTemp();
+	int pollIncomingTemp();
+	int pollExhaustTemp();
     int pollFanSpeed();
     int pollDefaultFanSpeed();
-    int pollRH();
+    int pollRh();
     int pollServicePeriod();
     int pollServiceCounter();
     int pollHeatingTarget();

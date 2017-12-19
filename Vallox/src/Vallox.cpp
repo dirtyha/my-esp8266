@@ -64,7 +64,7 @@ void Vallox::init() {
   // init data
   data.updated = millis();
   data.is_on = pollIsOn();
-  data.is_rh_mode = pollIsRHMode();
+  data.is_rh_mode = pollIsRhMode();
   data.is_heating_mode = pollIsHeatingMode();
   data.is_summer_mode = pollIsSummerMode();
   data.is_filter = pollIsFilter();
@@ -73,15 +73,14 @@ void Vallox::init() {
   data.is_service = pollIsService();
   data.fan_speed =  pollFanSpeed();
   data.default_fan_speed =  pollDefaultFanSpeed();
-  data.rh = pollRH();
+  data.rh = pollRh();
   data.service_period = pollServicePeriod();
   data.service_counter = pollServiceCounter();
   data.heating_target = pollHeatingTarget();
-
-  data.t_outside =  NOT_SET;  // read only
-  data.t_inside =   NOT_SET;  // read only
-  data.t_exhaust =  NOT_SET;  // read only
-  data.t_incoming = NOT_SET;  // read only
+  data.t_outside = pollOutsideTemp();
+  data.t_inside = pollInsideTemp();
+  data.t_exhaust = pollExhaustTemp();
+  data.t_incoming = pollIncomingTemp();
 }
 
 void Vallox::loop() {
@@ -100,44 +99,64 @@ void Vallox::loop() {
 void Vallox::setFanSpeed(int speed) {
   if (speed <= VX_MAX_FAN_SPEED) {
     setVariable(VX_VARIABLE_FAN_SPEED, fanSpeed2Hex(speed));
+	data.fan_speed = speed;
   }
 }
 
 void Vallox::setDefaultFanSpeed(int speed) {
   if (speed < VX_MAX_FAN_SPEED) {
     setVariable(VX_VARIABLE_DEFAULT_FAN_SPEED, fanSpeed2Hex(speed));
+	data.default_fan_speed = speed;
   }
 }
 
 void Vallox::setOn() {
   byte status = getVariable(VX_VARIABLE_STATUS);
   setVariable(VX_VARIABLE_STATUS, status | VX_STATUS_FLAG_POWER);
+  data.is_on = true;
 }
 
 void Vallox::setOff() {
   byte status = getVariable(VX_VARIABLE_STATUS);
   setVariable(VX_VARIABLE_STATUS, status & ~VX_STATUS_FLAG_POWER);
+  data.is_on = false;
 }
 
-void Vallox::setRHMode() {
+void Vallox::setRhModeOn() {
   byte status = getVariable(VX_VARIABLE_STATUS);
   setVariable(VX_VARIABLE_STATUS, status | VX_STATUS_FLAG_RH);
+  data.is_rh_mode = true;
 }
 
-void Vallox::setHeatingMode() {
+void Vallox::setRhModeOff() {
+  byte status = getVariable(VX_VARIABLE_STATUS);
+  setVariable(VX_VARIABLE_STATUS, status & ~VX_STATUS_FLAG_RH);
+  data.is_rh_mode = false;
+}
+
+void Vallox::setHeatingModeOn() {
   byte status = getVariable(VX_VARIABLE_STATUS);
   setVariable(VX_VARIABLE_STATUS, status | VX_STATUS_FLAG_HEATING_MODE);
+  data.is_heating_mode = true;
+}
+
+void Vallox::setHeatingModeOff() {
+  byte status = getVariable(VX_VARIABLE_STATUS);
+  setVariable(VX_VARIABLE_STATUS, status & ~VX_STATUS_FLAG_HEATING_MODE);
+  data.is_heating_mode = false;
 }
 
 void Vallox::setServicePeriod(int months) {
   if (months >= 0 && months < 256) {
     setVariable(VX_VARIABLE_SERVICE_PERIOD, months);
+    data.service_period = months;
   }
 }
 
 void Vallox::setServiceCounter(int months) {
   if (months >= 0 && months < 256) {
     setVariable(VX_VARIABLE_SERVICE_COUNTER, months);
+    data.service_counter = months;
   }
 }
 
@@ -145,6 +164,7 @@ void Vallox::setHeatingTarget(int cel) {
   if (cel >= 5 && cel < 22) {
     byte ntc = cel2Ntc(cel);
     setVariable(VX_VARIABLE_HEATING_TARGET, ntc);
+    data.heating_target = cel;
   }
 }
 
@@ -173,7 +193,7 @@ boolean Vallox::isOn() {
   return data.is_on;
 }
 
-boolean Vallox::isRHMode() {
+boolean Vallox::isRhMode() {
   return data.is_rh_mode;
 }
 
@@ -217,7 +237,7 @@ int Vallox::getDefaultFanSpeed() {
   return data.default_fan_speed;
 }
 
-int Vallox::getRH() {
+int Vallox::getRh() {
   return data.rh;
 }
 
@@ -226,12 +246,28 @@ int Vallox::getHeatingTarget() {
 }
 
 // pollers (from bus)
+int Vallox::pollInsideTemp() {
+  return getVariable(VX_VARIABLE_T_INSIDE);
+}
+
+int Vallox::pollOutsideTemp() {
+  return getVariable(VX_VARIABLE_T_OUTSIDE);
+}
+
+int Vallox::pollIncomingTemp() {
+  return getVariable(VX_VARIABLE_T_INCOMING);
+}
+
+int Vallox::pollExhaustTemp() {
+  return getVariable(VX_VARIABLE_T_EXHAUST);
+}
+
 boolean Vallox::pollIsOn() {
   byte status = getVariable(VX_VARIABLE_STATUS);
   return status & VX_STATUS_FLAG_POWER != 0x00;
 }
 
-boolean Vallox::pollIsRHMode() {
+boolean Vallox::pollIsRhMode() {
   byte status = getVariable(VX_VARIABLE_STATUS);
   return status & VX_STATUS_FLAG_RH != 0x00;
 }
@@ -284,7 +320,7 @@ int Vallox::pollDefaultFanSpeed() {
   return hex2FanSpeed(speed);
 }
 
-int Vallox::pollRH() {
+int Vallox::pollRh() {
   byte hex = getVariable(VX_VARIABLE_RH);
   int rh = hex2Rh(rh);
 
@@ -315,7 +351,7 @@ void Vallox::setVariable(byte variable, byte value) {
   for (int i = 0; i < VX_MSG_LENGTH; i++) {
     serial->write(message[i]);
   }
-
+  
   message[1] = VX_MSG_MAINBOARD_1;
   message[2] = VX_MSG_PANELS;
   message[5] = calculateCheckSum(message);
@@ -407,7 +443,7 @@ void Vallox::decodeMessage(const byte message[]) {
       data.t_outside = cel;
       data.updated = now;
     }
-  } else if (variable == VX_VARIABLE_T_OUTBOUND) {
+  } else if (variable == VX_VARIABLE_T_EXHAUST) {
     int cel = ntc2Cel(value);
     if(cel != data.t_exhaust) {
       data.t_exhaust = cel;
@@ -419,7 +455,7 @@ void Vallox::decodeMessage(const byte message[]) {
       data.t_inside = cel;
       data.updated = now;
     }
-  } else if (variable == VX_VARIABLE_T_INBOUND) {
+  } else if (variable == VX_VARIABLE_T_INCOMING) {
     int cel = ntc2Cel(value);
     if(cel != data.t_incoming) {
       data.t_incoming = cel;

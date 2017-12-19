@@ -6,7 +6,9 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <Vallox.h>
-#include "xCredentials.h"
+// you must create your own xCredentials.h for Watson IoT and WiFi: 
+// ORG, DEVICE_ID, TOKEN, ssid and password
+#include "xCredentials.h" 
 
 #define DEVICE_TYPE "VentillationMachine"
 #define JSON_BUFFER_LENGTH 300
@@ -107,28 +109,17 @@ boolean publishData() {
   JsonObject& root = jsonBuffer.createObject();
   JsonObject& d = root.createNestedObject("d");
 
-  if (vxIsSet(vx.getInsideTemp())) {
-    d["T_IN"] = vx.getInsideTemp();
-  }
+  d["T_IN"] = vx.getInsideTemp();
+  d["T_OUT"] = vx.getOutsideTemp();
+  d["T_INB"] = vx.getIncomingTemp();
+  d["T_OUTB"] = vx.getExhaustTemp();
 
-  if (vxIsSet(vx.getOutsideTemp())) {
-    d["T_OUT"] = vx.getOutsideTemp();
-  }
-
-  if (vxIsSet(vx.getInsideTemp())) {
-    d["T_INB"] = vx.getIncomingTemp();
-  }
-
-  if (vxIsSet(vx.getExhaustTemp())) {
-    d["T_OUTB"] = vx.getExhaustTemp();
-  }
-
-  if (vxIsSet(vx.getRH())) {
-    d["RH"] = vx.getRH();
+  if (vxIsSet(vx.getRh())) {
+    d["RH"] = vx.getRh();
   }
 
   d["ON"] = vx.isOn();
-  d["RH_MODE"] = vx.isRHMode();
+  d["RH_MODE"] = vx.isRhMode();
   d["HEATING_MODE"] = vx.isHeatingMode();
   d["SUMMER_MODE"] = vx.isSummerMode();
   d["HEATING"] = vx.isHeating();
