@@ -3,6 +3,7 @@
 // =======================================
 
 #include <Arduino.h>
+#include <SoftwareSerial.h>
 
 #define VX_MSG_LENGTH 6
 #define VX_MSG_DOMAIN 0x01
@@ -41,11 +42,16 @@
 
 // measured data from ValloxDSE
 typedef struct {
+  unsigned long updated;
+
   boolean is_on;
-  boolean is_CO2_mode;
-  boolean is_RH_mode;
+  boolean is_rh_mode;
   boolean is_heating_mode;
   boolean is_summer_mode;
+  boolean is_filter;
+  boolean is_heating;
+  boolean is_fault;
+  boolean is_service;
 
   int t_outside;
   int t_inside;
@@ -54,6 +60,10 @@ typedef struct {
 
   int fan_speed;
   int default_fan_speed;
+  int rh;
+  int service_period;
+  int service_counter;
+  int heating_target;
 } vx_data;
 
 class Vallox {
@@ -62,10 +72,7 @@ class Vallox {
     Vallox(byte rx, byte tx, boolean isDebug);
 
     // getters
-    int getFanSpeed();
-    int getDefaultFanSpeed();
     boolean isOn();
-    boolean isCO2Mode();
     boolean isRHMode();
     boolean isHeatingMode();
     boolean isSummerMode();
@@ -73,6 +80,9 @@ class Vallox {
     boolean isHeating();
     boolean isFault();
     boolean isService();
+    int getFanSpeed();
+    int getDefaultFanSpeed();
+    int getRH();
     int getServicePeriod();
     int getServiceCounter();
     int getHeatingTarget();
@@ -83,7 +93,6 @@ class Vallox {
     void setDefaultFanSpeed(int speed);
     void setOn();
     void setOff();
-    void setCO2Mode();
     void setRHMode();
     void setHeatingMode();
     void setServicePeriod(int months);
@@ -102,17 +111,19 @@ class Vallox {
 
     // conversions
     static byte fanSpeed2Hex(int fan);
-    static int hex2FanSpeed(byte b);
-    static int ntc2Cel(byte b);
+    static int hex2FanSpeed(byte hex);
+    static int ntc2Cel(byte ntc);
     static byte cel2Ntc(int cel);
+    static int hex2RH(byte hex);
 
     // read and decode messages
     boolean readMessage(byte message[]);
     void decodeMessage(const byte message[]);
+    void decodeStatus(byte status);
 
     // helpers
     static byte calculateCheckSum(const byte message[]);
-    void prettyPrint(const byte message[]);    
+    void prettyPrint(const byte message[]);
 };
 
 // helpers

@@ -49,16 +49,34 @@ Vallox::Vallox(byte rx, byte tx, boolean debug) {
 }
 
 vx_data* Vallox::init() {
+  if(isDebug) {
+    Serial.println("Vallox init.");  
+  }
+
   // set the data rate for the SoftwareSerial port
   serial->begin(9600);
 
   // init data
+  data.updated = millis();
+  data.is_on = isOn();
+  data.is_rh_mode = isRHMode();
+  data.is_heating_mode = isHeatingMode();
+  data.is_summer_mode = isSummerMode();
+  data.is_filter = isFilter();
+  data.is_heating = isHeating();
+  data.is_fault = isFault();
+  data.is_service = isService();
+  data.fan_speed =  getFanSpeed();
+  data.default_fan_speed =  getDefaultFanSpeed();
+  data.rh = getRH();
+  data.service_period = getServicePeriod();
+  data.service_counter = getServiceCounter();
+  data.heating_target = getHeatingTarget();
+
   data.t_outside =  NOT_SET;  // read only
   data.t_inside =   NOT_SET;  // read only
   data.t_outbound = NOT_SET;  // read only
   data.t_inbound =  NOT_SET;  // read only
-  data.fan_speed =  getFanSpeed();
-  data.is_on = isOn();
 
   return &data;
 }
@@ -68,10 +86,10 @@ vx_data* Vallox::loop() {
 
   // read and decode all available messages
   while (readMessage(message)) {
-    decodeMessage(message);
     if (isDebug) {
       prettyPrint(message);
     }
+    decodeMessage(message);
   }
 
   return &data;
@@ -98,11 +116,6 @@ void Vallox::setOn() {
 void Vallox::setOff() {
   byte status = getVariable(VX_VARIABLE_STATUS);
   setVariable(VX_VARIABLE_STATUS, status & ~VX_STATUS_FLAG_POWER);
-}
-
-void Vallox::setCO2Mode() {
-  byte status = getVariable(VX_VARIABLE_STATUS);
-  setVariable(VX_VARIABLE_STATUS, status | VX_STATUS_FLAG_CO2);
 }
 
 void Vallox::setRHMode() {
@@ -135,24 +148,9 @@ void Vallox::setHeatingTarget(int cel) {
 }
 
 // getters
-int Vallox::getFanSpeed() {
-  byte speed = getVariable(VX_VARIABLE_FAN_SPEED);
-  return hex2FanSpeed(speed);
-}
-
-int Vallox::getDefaultFanSpeed() {
-  byte speed = getVariable(VX_VARIABLE_DEFAULT_FAN_SPEED);
-  return hex2FanSpeed(speed);
-}
-
 boolean Vallox::isOn() {
   byte status = getVariable(VX_VARIABLE_STATUS);
   return status & VX_STATUS_FLAG_POWER;
-}
-
-boolean Vallox::isCO2Mode() {
-  byte status = getVariable(VX_VARIABLE_STATUS);
-  return status & VX_STATUS_FLAG_CO2;
 }
 
 boolean Vallox::isRHMode() {
@@ -162,7 +160,7 @@ boolean Vallox::isRHMode() {
 
 boolean Vallox::isHeatingMode() {
   byte status = getVariable(VX_VARIABLE_STATUS);
-  return status & VX_STATUS_FLAG_HEATING_MODE;
+  return status & VX_STATUS_FLAG_HEATING_MODE != 0x00;
 }
 
 boolean Vallox::isSummerMode() {
@@ -198,6 +196,24 @@ int Vallox::getServiceCounter() {
   return getVariable(VX_VARIABLE_SERVICE_COUNTER);
 }
 
+int Vallox::getFanSpeed() {
+  byte speed = getVariable(VX_VARIABLE_FAN_SPEED);
+  return hex2FanSpeed(speed);
+}
+
+int Vallox::getDefaultFanSpeed() {
+  byte speed = getVariable(VX_VARIABLE_DEFAULT_FAN_SPEED);
+  return hex2FanSpeed(speed);
+}
+
+int Vallox::getRH() {
+  return getVariable(VX_VARIABLE_RH);
+}
+
+int Vallox::getHeatingTarget() {
+  return getVariable(VX_VARIABLE_HEATING_TARGET);
+}
+
 // set variable value in mainboards and panels
 void Vallox::setVariable(byte variable, byte value) {
   byte message[VX_MSG_LENGTH];
@@ -226,6 +242,10 @@ void Vallox::setVariable(byte variable, byte value) {
 
 // get variable value from mainboards
 byte Vallox::getVariable(byte variable) {
+  if(isDebug) {
+    Serial.print("Reading variable ");Serial.print(variable, HEX);Serial.print(" = ");
+  }
+
   byte ret = 0x00;
 
   byte message[VX_MSG_LENGTH];
@@ -248,6 +268,10 @@ byte Vallox::getVariable(byte variable) {
       ret = reply[4];
       break;
     }
+  }
+
+  if(isDebug) {
+    Serial.println(ret, HEX);
   }
 
   return ret;
@@ -289,34 +313,128 @@ void Vallox::decodeMessage(const byte message[]) {
   // decode variable in message
   byte variable = message[3];
   byte value = message[4];
+  unsigned long now = millis();
 
   if (variable == VX_VARIABLE_T_OUTSIDE) {
-    data.t_outside = ntc2Cel(value);
+    int cel = ntc2Cel(value);
+    if(cel != data.t_outside) {
+      data.t_outside = cel;
+      data.updated = now;
+    }
   } else if (variable == VX_VARIABLE_T_OUTBOUND) {
-    data.t_outbound = ntc2Cel(value);
+    int cel = ntc2Cel(value);
+    if(cel != data.t_outbound) {
+      data.t_outbound = cel;
+      data.updated = now;
+    }
   } else if (variable == VX_VARIABLE_T_INSIDE) {
-    data.t_inside = ntc2Cel(value);
+    int cel = ntc2Cel(value);
+    if(cel != data.t_inside) {
+      data.t_inside = cel;
+      data.updated = now;
+    }
   } else if (variable == VX_VARIABLE_T_INBOUND) {
-    data.t_inbound = ntc2Cel(value);
+    int cel = ntc2Cel(value);
+    if(cel != data.t_inbound) {
+      data.t_inbound = cel;
+      data.updated = now;
+    }
   } else if (variable == VX_VARIABLE_FAN_SPEED) {
-    data.fan_speed = hex2FanSpeed(value);
+    int speed = hex2FanSpeed(value);
+    if(speed != data.fan_speed) {
+      data.fan_speed = speed;
+      data.updated = now;
+    }
+  } else if (variable == VX_VARIABLE_DEFAULT_FAN_SPEED) {
+    int speed = hex2FanSpeed(value);
+    if(speed != data.default_fan_speed) {
+      data.default_fan_speed = speed;
+      data.updated = now;
+    }
   } else if (variable == VX_VARIABLE_STATUS) {
-    // TODO
+    decodeStatus(value);
+  } else if (variable == VX_VARIABLE_IO_08) {
+    boolean summer_mode = value & 0x01;
+    if(summer_mode != data.is_summer_mode) {
+      data.is_summer_mode = summer_mode;
+      data.updated = now;
+    }
   } else if (variable == VX_VARIABLE_SERVICE_PERIOD) {
-    // TODO
+    if(value != data.service_period) {
+      data.service_period = value;
+      data.updated = now;
+    }
   } else if (variable == VX_VARIABLE_SERVICE_COUNTER) {
-    // TODO
+    if(value != data.service_counter) {
+      data.service_counter = value;
+      data.updated = now;
+    }
   } else if (variable == VX_VARIABLE_RH) {
-    // TODO
+    int rh = hex2RH(value);
+    if(rh != data.rh) {
+      data.rh = rh;
+      data.updated = now;
+    }
+  } else if (variable == VX_VARIABLE_HEATING_TARGET) {
+    int cel = ntc2Cel(value);
+    if(cel != data.heating_target) {
+      data.heating_target = cel;
+      data.updated = now;
+    }
   } else {
     // variable not recognized
   }
-
-
 }
 
-int Vallox::ntc2Cel(byte b) {
-  int i = (int)b;
+void Vallox::decodeStatus(byte status) {
+  unsigned long now = millis();
+  
+  boolean on = status & VX_STATUS_FLAG_POWER;
+  if(on != data.is_on) {
+    data.is_on = on;
+    data.updated = now;
+  }
+
+  boolean rh_mode = status & VX_STATUS_FLAG_RH;
+  if(rh_mode != data.is_rh_mode) {
+    data.is_rh_mode = rh_mode;
+    data.updated = now;
+  }
+
+
+  boolean heating_mode = status & VX_STATUS_FLAG_HEATING_MODE;
+  if(heating_mode != data.is_heating_mode){
+    data.is_heating_mode = heating_mode;
+    data.updated = now;
+  }
+  
+  boolean filter = status & VX_STATUS_FLAG_FILTER;
+  if(filter != data.is_filter) {
+    data.is_filter = filter;
+    data.updated = now;
+  }
+  
+  boolean heating = status & VX_STATUS_FLAG_HEATING;
+  if(heating != data.is_heating) {
+    data.is_heating = heating;
+    data.updated = now;
+  }
+  
+  boolean fault = status & VX_STATUS_FLAG_FAULT;
+  if(fault != data.is_fault) {
+    data.is_fault = fault;
+    data.updated = now;
+  }
+  
+  boolean service = status & VX_STATUS_FLAG_SERVICE;
+  if(service != data.is_service) {
+    data.is_service = service;
+    data.updated = now;
+  }
+}
+
+int Vallox::ntc2Cel(byte ntc) {
+  int i = (int)ntc;
   return vxTemps[i];
 }
 
@@ -335,14 +453,18 @@ byte Vallox::fanSpeed2Hex(int fan) {
   return vxFanSpeeds[fan - 1];
 }
 
-int Vallox::hex2FanSpeed(byte b) {
+int Vallox::hex2FanSpeed(byte hex) {
   for (int i = 0; i < sizeof(vxFanSpeeds); i++) {
-    if (vxFanSpeeds[i] == b) {
+    if (vxFanSpeeds[i] == hex) {
       return i + 1;
     }
   }
 
   return 0;
+}
+
+int Vallox::hex2RH(byte hex) {
+  return (hex - 51) / 2.04;;
 }
 
 // calculate VX message checksum

@@ -4,14 +4,13 @@
 
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
-#include <SoftwareSerial.h>
 #include <ArduinoJson.h>
-#include <CRC32.h>
 #include "xCredentials.h"
 #include "xVallox.h"
 
 #define DEVICE_TYPE "VentillationMachine"
 #define JSON_BUFFER_LENGTH 300
+#define DEBUG true
 
 const char publishTopic[] = "iot-2/evt/status/fmt/json";          // publish measurements here
 const char updateTopic[] = "iot-2/cmd/update/fmt/json";           // subscribe for update command
@@ -25,16 +24,15 @@ char clientId[] = "d:" ORG ":" DEVICE_TYPE ":" DEVICE_ID;
 WiFiClient wifiClient;
 void myCallback(char* topic, byte* payload, unsigned int payloadLength);
 PubSubClient client(server, 1883, myCallback, wifiClient);
-Vallox vx(D1, D2, true);
-CRC32 crc;
-uint32_t oldHash;
+Vallox vx(D1, D2, DEBUG);
+unsigned long lastUpdated;
 
 void setup() {
   Serial.begin(9600);
 
   wifiConnect();
   vx_data* data = vx.init();
-  oldHash = crc.calculate(data, sizeof(vx_data));
+  lastUpdated = data->updated;
   mqttConnect();
 
   Serial.println("Setup done.");
@@ -50,17 +48,18 @@ void loop() {
     mqttConnect();
   }
 
-  uint32_t newHash = crc.calculate(data, sizeof(vx_data));
-  if (newHash != oldHash) {
+  if (lastUpdated != data->updated) {
     // data hash changed
     publishData(data);
-    oldHash = newHash;
-    prettyPrint(data);
+    lastUpdated = data->updated;
+    if(DEBUG) {
+      prettyPrint(data);
+    }
   }
 }
 
 void prettyPrint(vx_data* data) {
-  Serial.print("Inside ait T="); Serial.print(data->t_inside); Serial.print(", ");
+  Serial.print("Inside air T="); Serial.print(data->t_inside); Serial.print(", ");
   Serial.print("Outside air T="); Serial.print(data->t_outside); Serial.print(", ");
   Serial.print("Inbound air T="); Serial.print(data->t_inbound); Serial.print(", ");
   Serial.print("Outbound air T="); Serial.print(data->t_outbound); Serial.print(", ");
@@ -117,16 +116,27 @@ void publishData(vx_data* data) {
     d["T_OUTB"] = data->t_outbound;
   }
 
-  if (vxIsSet(data->fan_speed)) {
-    d["SPEED"] = data->fan_speed;
-  }
+  d["SPEED"] = data->fan_speed;
+  d["ON"] = data->is_on;
+  d["RH_MODE"] = data->is_rh_mode;
+  d["HEATING_MODE"] = data->is_heating_mode;
+  d["SUMMER_MODE"] = data->is_summer_mode;
+  d["HEATING"] = data->is_heating;
+  d["FAULT"] = data->is_fault;
+  d["SERVICE"] = data->is_service;
+  d["SPEED"] = data->fan_speed;
+  d["DEFAULT_SPEED"] = data->default_fan_speed;
+  d["RH"] = data->rh;
+  d["SERVICE_PERIOD"] = data->service_period;
+  d["SERVICE_COUNTER"] = data->service_counter;
+  d["HEATING_TARGET"] = data->heating_target;
 
-  if (vxIsSet(data->is_on)) {
-    d["ON"] = data->is_on;
+  if(DEBUG) {
+    Serial.println("Publish payload:"); root.prettyPrintTo(Serial); Serial.println();
   }
 
   char buff[JSON_BUFFER_LENGTH];
-  root.printTo(buff, sizeof(buff));
+  root.printTo(buff, JSON_BUFFER_LENGTH);
 
   if (client.publish(publishTopic, buff)) {
     Serial.println("Publish OK");
@@ -150,8 +160,11 @@ void handleUpdate(byte * payload) {
     Serial.println("handleUpdate: payload parse FAILED");
     return;
   }
-  Serial.println("handleUpdate payload:"); root.prettyPrintTo(Serial); Serial.println();
 
+  if(DEBUG) {
+    Serial.println("handleUpdate payload:"); root.prettyPrintTo(Serial); Serial.println();
+  }
+  
   JsonObject& d = root["d"];
   if (d.containsKey("speed")) {
     int speed = d["speed"];
