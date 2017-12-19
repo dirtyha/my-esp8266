@@ -165,7 +165,7 @@ void Vallox::setServiceCounter(int months) {
 }
 
 void Vallox::setHeatingTarget(int cel) {
-  if (cel >= 5 && cel < 22) {
+  if (cel >= 5 && cel <= 22) {
     byte ntc = cel2Ntc(cel);
     setVariable(VX_VARIABLE_HEATING_TARGET, ntc);
     data.heating_target = cel;
@@ -364,6 +364,11 @@ void Vallox::setVariable(byte variable, byte value) {
   for (int i = 0; i < VX_MSG_LENGTH; i++) {
     serial->write(message[i]);
   }
+
+  if(isDebug) {
+    Serial.print("Variable ");Serial.print(variable, HEX);
+	Serial.print(" set to ");Serial.println(value, HEX);
+  }
 }
 
 // poll variable value from mainboards
@@ -478,7 +483,7 @@ void Vallox::decodeMessage(const byte message[]) {
   } else if (variable == VX_VARIABLE_STATUS) {
     decodeStatus(value);
   } else if (variable == VX_VARIABLE_IO_08) {
-    boolean summer_mode = value & 0x01;
+    boolean summer_mode = value & 0x01 != 0x00;
     if(summer_mode != data.is_summer_mode) {
       data.is_summer_mode = summer_mode;
       data.updated = now;
@@ -576,9 +581,10 @@ byte Vallox::cel2Ntc(int cel) {
 byte Vallox::fanSpeed2Hex(int fan) {
   if (fan > 0 && fan < 9) {
     return vxFanSpeeds[fan - 1];
-  } else {
-      
   }
+
+  // we should not be here, return speed 1 as default
+  return VX_FAN_SPEED_1;
 }
 
 int Vallox::hex2FanSpeed(byte hex) {
@@ -588,7 +594,7 @@ int Vallox::hex2FanSpeed(byte hex) {
     }
   }
 
-  return 0;
+  return NOT_SET;
 }
 
 int Vallox::hex2Rh(byte hex) {
