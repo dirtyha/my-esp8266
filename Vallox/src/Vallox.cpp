@@ -391,6 +391,8 @@ byte Vallox::pollVariable(byte variable) {
     serial->write(message[i]);
   }
 
+  delay(10);
+  
   byte reply[VX_MSG_LENGTH];
   while (readMessage(reply)) {
     if (reply[2] == VX_MSG_PANEL_1 && reply[3] == variable) {
