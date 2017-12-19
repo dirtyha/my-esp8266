@@ -65,7 +65,7 @@ void Vallox::init() {
   // set the data rate for the SoftwareSerial port
   serial->begin(9600);
 
-  // init data
+  // init cache
   data.updated = millis();
   data.is_on = pollIsOn();
   data.is_rh_mode = pollIsRhMode();
@@ -90,7 +90,7 @@ void Vallox::init() {
 void Vallox::loop() {
   byte message[VX_MSG_LENGTH];
 
-  // read and decode all available messages
+  // read and decode as long as messages are available
   while (readMessage(message)) {
     if (isDebug) {
       prettyPrint(message);
@@ -100,6 +100,8 @@ void Vallox::loop() {
 }
 
 // setters
+// these will set data both in the bus and cache
+
 void Vallox::setFanSpeed(int speed) {
   if (speed <= VX_MAX_FAN_SPEED) {
     setVariable(VX_VARIABLE_FAN_SPEED, fanSpeed2Hex(speed));
@@ -172,7 +174,8 @@ void Vallox::setHeatingTarget(int cel) {
   }
 }
 
-// getters (from memory)
+// getters get data from the cache
+
 unsigned long Vallox::getUpdated() {
   return data.updated;
 }
@@ -249,7 +252,8 @@ int Vallox::getHeatingTarget() {
   return data.heating_target;
 }
 
-// pollers (from bus)
+// pollers poll data from the bus
+
 int Vallox::pollInsideTemp() {
   return pollVariable(VX_VARIABLE_T_INSIDE);
 }
@@ -340,7 +344,9 @@ int Vallox::pollHeatingTarget() {
   return ntc2Cel(ntc);
 }
 
-// set variable value in mainboards and panels
+// private
+
+// set generic variable value in all mainboards and panels
 void Vallox::setVariable(byte variable, byte value) {
   byte message[VX_MSG_LENGTH];
 
@@ -351,7 +357,7 @@ void Vallox::setVariable(byte variable, byte value) {
   message[4] = value;
   message[5] = calculateCheckSum(message);
 
-  // send to mainboards
+  // send to all mainboards
   for (int i = 0; i < VX_MSG_LENGTH; i++) {
     serial->write(message[i]);
   }
@@ -360,7 +366,7 @@ void Vallox::setVariable(byte variable, byte value) {
   message[2] = VX_MSG_PANELS;
   message[5] = calculateCheckSum(message);
 
-  // send to panels
+  // send to all panels
   for (int i = 0; i < VX_MSG_LENGTH; i++) {
     serial->write(message[i]);
   }
@@ -371,7 +377,7 @@ void Vallox::setVariable(byte variable, byte value) {
   }
 }
 
-// poll variable value from mainboards
+// poll variable value from mainboard 1
 byte Vallox::pollVariable(byte variable) {
   if(isDebug) {
     Serial.print("Polled variable ");Serial.print(variable, HEX);Serial.print(" = ");
@@ -391,6 +397,7 @@ byte Vallox::pollVariable(byte variable) {
     serial->write(message[i]);
   }
 
+  // leave time for the reply to arrive
   delay(10);
   
   byte reply[VX_MSG_LENGTH];
@@ -408,11 +415,10 @@ byte Vallox::pollVariable(byte variable) {
   return ret;
 }
 
-// private
-
-// reads one full message
+// tries to read one full message
+// returns true if a message was read, false otherwise
 boolean Vallox::readMessage(byte message[]) {
-  boolean ret = false; // true = new message has been received, false = no message
+  boolean ret = false;
 
   if (serial->available() >= VX_MSG_LENGTH) {
     message[0] = serial->read();
@@ -421,8 +427,8 @@ boolean Vallox::readMessage(byte message[]) {
       message[1] = serial->read();
       message[2] = serial->read();
 
-      // accept messages from mainboard to panel 1 or all panels
-      // accept messages from panel to mainboard 1 or all mainboards
+      // accept messages from mainboard 1 or panel 1
+      // accept messages to panel 1, mainboard 1 or to all panels and mainboards
       if ((message[1] == VX_MSG_MAINBOARD_1 || message[1] == VX_MSG_PANEL_1) &&
           (message[2] == VX_MSG_PANELS || message[2] == VX_MSG_PANEL_1 ||
            message[2] == VX_MSG_MAINBOARD_1 || message[2] == VX_MSG_MAINBOARDS)) {
