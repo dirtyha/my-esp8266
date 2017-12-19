@@ -25,7 +25,8 @@ void loop() {
     prettyPrint();
   }
 
-  // write data
+  // send data from arduino
+  // setters follow pattern setVariable() - see prettyPrint for available variables
   int fanSpeed = vx.getFanSpeed();
   if (!anybodyHome() && vx.getFanSpeed() > 1) {
     vx.setFanSpeed(1);
@@ -36,11 +37,26 @@ boolean anybodyHome() {
   return false;
 }
 
+// getters follow pattern getVariable()
 void prettyPrint() {
-  Serial.print("Inside temperature = "); Serial.println(vx.getInsideTemp());
-  Serial.print("Outside temperature = "); Serial.println(vx.getOutsideTemp());
-  Serial.print("Incoming temperature = "); Serial.println(vx.getIncomingTemp());
-  Serial.print("Exhaust temperature = "); Serial.println(vx.getExhaustTemp());
-  Serial.print("Fan speed = "); Serial.println(vx.getFanSpeed());
+  Serial.print("Inside temperature (C) = "); Serial.println(vx.getInsideTemp());
+  Serial.print("Outside temperature (C) = "); Serial.println(vx.getOutsideTemp());
+  Serial.print("Incoming temperature (C) = "); Serial.println(vx.getIncomingTemp());
+  Serial.print("Exhaust temperature (C) = "); Serial.println(vx.getExhaustTemp());
+  Serial.print("Fan speed (1-8) = "); Serial.println(vx.getFanSpeed());
+  Serial.print("Power = "); vx.isOn() ? Serial.println("on") : Serial.println("off");
+  Serial.print("RH mode = "); vx.isRhMode() ? Serial.println("on") : Serial.println("off");
+  Serial.print("Heating mode = "); vx.isHeatingMode() ? Serial.println("on") : Serial.println("off");
+  Serial.print("Summer mode = "); vx.isSummerMode() ? Serial.println("on") : Serial.println("off");
+  Serial.print("Is filter dirty = "); vx.isFilter() ? Serial.println("yes") : Serial.println("no");
+  Serial.print("Is heating = "); vx.isHeating() ? Serial.println("yes") : Serial.println("no");
+  Serial.print("Is faulty = "); vx.isFault() ? Serial.println("yes") : Serial.println("no");
+  Serial.print("Needs service = "); vx.isService() ? Serial.println("yes") : Serial.println("no");
+  Serial.print("Default fan speed (1-8) = "); Serial.println(vx.getDefaultFanSpeed());
+  Serial.print("RH (%) = "); Serial.println(vx.getRh());
+  Serial.print("Service period (months) = "); Serial.println(vx.getServicePeriod());
+  Serial.print("Service count down (months) = "); Serial.println(vx.getServiceCounter());
+  Serial.print("Heating target (C) = "); Serial.println(vx.getHeatingTarget());
+  Serial.println();
 }
 
