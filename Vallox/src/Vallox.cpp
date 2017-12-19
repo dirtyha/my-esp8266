@@ -1,3 +1,7 @@
+// =======================================
+// VALLOX DIGIT SE COMMUNICATION PROTOCOL
+// =======================================
+
 #include "Vallox.h"
 
 // VX fan speed (1-8) conversion table
@@ -111,37 +115,37 @@ void Vallox::setDefaultFanSpeed(int speed) {
 }
 
 void Vallox::setOn() {
-  byte status = getVariable(VX_VARIABLE_STATUS);
+  byte status = pollVariable(VX_VARIABLE_STATUS);
   setVariable(VX_VARIABLE_STATUS, status | VX_STATUS_FLAG_POWER);
   data.is_on = true;
 }
 
 void Vallox::setOff() {
-  byte status = getVariable(VX_VARIABLE_STATUS);
+  byte status = pollVariable(VX_VARIABLE_STATUS);
   setVariable(VX_VARIABLE_STATUS, status & ~VX_STATUS_FLAG_POWER);
   data.is_on = false;
 }
 
 void Vallox::setRhModeOn() {
-  byte status = getVariable(VX_VARIABLE_STATUS);
+  byte status = pollVariable(VX_VARIABLE_STATUS);
   setVariable(VX_VARIABLE_STATUS, status | VX_STATUS_FLAG_RH);
   data.is_rh_mode = true;
 }
 
 void Vallox::setRhModeOff() {
-  byte status = getVariable(VX_VARIABLE_STATUS);
+  byte status = pollVariable(VX_VARIABLE_STATUS);
   setVariable(VX_VARIABLE_STATUS, status & ~VX_STATUS_FLAG_RH);
   data.is_rh_mode = false;
 }
 
 void Vallox::setHeatingModeOn() {
-  byte status = getVariable(VX_VARIABLE_STATUS);
+  byte status = pollVariable(VX_VARIABLE_STATUS);
   setVariable(VX_VARIABLE_STATUS, status | VX_STATUS_FLAG_HEATING_MODE);
   data.is_heating_mode = true;
 }
 
 void Vallox::setHeatingModeOff() {
-  byte status = getVariable(VX_VARIABLE_STATUS);
+  byte status = pollVariable(VX_VARIABLE_STATUS);
   setVariable(VX_VARIABLE_STATUS, status & ~VX_STATUS_FLAG_HEATING_MODE);
   data.is_heating_mode = false;
 }
@@ -247,81 +251,81 @@ int Vallox::getHeatingTarget() {
 
 // pollers (from bus)
 int Vallox::pollInsideTemp() {
-  return getVariable(VX_VARIABLE_T_INSIDE);
+  return pollVariable(VX_VARIABLE_T_INSIDE);
 }
 
 int Vallox::pollOutsideTemp() {
-  return getVariable(VX_VARIABLE_T_OUTSIDE);
+  return pollVariable(VX_VARIABLE_T_OUTSIDE);
 }
 
 int Vallox::pollIncomingTemp() {
-  return getVariable(VX_VARIABLE_T_INCOMING);
+  return pollVariable(VX_VARIABLE_T_INCOMING);
 }
 
 int Vallox::pollExhaustTemp() {
-  return getVariable(VX_VARIABLE_T_EXHAUST);
+  return pollVariable(VX_VARIABLE_T_EXHAUST);
 }
 
 boolean Vallox::pollIsOn() {
-  byte status = getVariable(VX_VARIABLE_STATUS);
+  byte status = pollVariable(VX_VARIABLE_STATUS);
   return status & VX_STATUS_FLAG_POWER != 0x00;
 }
 
 boolean Vallox::pollIsRhMode() {
-  byte status = getVariable(VX_VARIABLE_STATUS);
+  byte status = pollVariable(VX_VARIABLE_STATUS);
   return status & VX_STATUS_FLAG_RH != 0x00;
 }
 
 boolean Vallox::pollIsHeatingMode() {
-  byte status = getVariable(VX_VARIABLE_STATUS);
+  byte status = pollVariable(VX_VARIABLE_STATUS);
   return status & VX_STATUS_FLAG_HEATING_MODE != 0x00;
 }
 
 boolean Vallox::pollIsSummerMode() {
-  byte io = getVariable(VX_VARIABLE_IO_08);
+  byte io = pollVariable(VX_VARIABLE_IO_08);
   return io & 0x02 != 0x00;
 }
 
 boolean Vallox::pollIsFilter() {
-  byte status = getVariable(VX_VARIABLE_STATUS);
+  byte status = pollVariable(VX_VARIABLE_STATUS);
   return status & VX_STATUS_FLAG_FILTER != 0x00;
 }
 
 boolean Vallox::pollIsHeating() {
-  byte status = getVariable(VX_VARIABLE_STATUS);
+  byte status = pollVariable(VX_VARIABLE_STATUS);
   return status & VX_STATUS_FLAG_HEATING != 0x00;
 }
 
 boolean Vallox::pollIsFault() {
-  byte status = getVariable(VX_VARIABLE_STATUS);
+  byte status = pollVariable(VX_VARIABLE_STATUS);
   return status & VX_STATUS_FLAG_FAULT != 0x00;
 }
 
 boolean Vallox::pollIsService() {
-  byte status = getVariable(VX_VARIABLE_STATUS);
+  byte status = pollVariable(VX_VARIABLE_STATUS);
   return status & VX_STATUS_FLAG_SERVICE != 0x00;
 }
 
 int Vallox::pollServicePeriod() {
-  return getVariable(VX_VARIABLE_SERVICE_PERIOD);
+  return pollVariable(VX_VARIABLE_SERVICE_PERIOD);
 }
 
 int Vallox::pollServiceCounter() {
-  return getVariable(VX_VARIABLE_SERVICE_COUNTER);
+  return pollVariable(VX_VARIABLE_SERVICE_COUNTER);
 }
 
 int Vallox::pollFanSpeed() {
-  byte speed = getVariable(VX_VARIABLE_FAN_SPEED);
+  byte speed = pollVariable(VX_VARIABLE_FAN_SPEED);
   return hex2FanSpeed(speed);
 }
 
 int Vallox::pollDefaultFanSpeed() {
-  byte speed = getVariable(VX_VARIABLE_DEFAULT_FAN_SPEED);
+  byte speed = pollVariable(VX_VARIABLE_DEFAULT_FAN_SPEED);
   return hex2FanSpeed(speed);
 }
 
 int Vallox::pollRh() {
-  byte hex = getVariable(VX_VARIABLE_RH);
+  byte hex = pollVariable(VX_VARIABLE_RH);
   int rh = hex2Rh(rh);
 
   if(rh >= 0 && rh <= 100) {
@@ -332,7 +336,7 @@ int Vallox::pollRh() {
 }
 
 int Vallox::pollHeatingTarget() {
-  byte ntc = getVariable(VX_VARIABLE_HEATING_TARGET);
+  byte ntc = pollVariable(VX_VARIABLE_HEATING_TARGET);
   return ntc2Cel(ntc);
 }
 
@@ -362,10 +366,10 @@ void Vallox::setVariable(byte variable, byte value) {
   }
 }
 
-// get variable value from mainboards
-byte Vallox::getVariable(byte variable) {
+// poll variable value from mainboards
+byte Vallox::pollVariable(byte variable) {
   if(isDebug) {
-    Serial.print("Reading variable ");Serial.print(variable, HEX);Serial.print(" = ");
+    Serial.print("Polled variable ");Serial.print(variable, HEX);Serial.print(" = ");
   }
 
   byte ret = 0x00;
@@ -381,8 +385,6 @@ byte Vallox::getVariable(byte variable) {
   for (int i = 0; i < VX_MSG_LENGTH; i++) {
     serial->write(message[i]);
   }
-
-  delay(10);
 
   byte reply[VX_MSG_LENGTH];
   while (readMessage(reply)) {
@@ -511,44 +513,44 @@ void Vallox::decodeMessage(const byte message[]) {
 void Vallox::decodeStatus(byte status) {
   unsigned long now = millis();
   
-  boolean on = status & VX_STATUS_FLAG_POWER;
+  boolean on = status & VX_STATUS_FLAG_POWER != 0x00;
   if(on != data.is_on) {
     data.is_on = on;
     data.updated = now;
   }
 
-  boolean rh_mode = status & VX_STATUS_FLAG_RH;
+  boolean rh_mode = status & VX_STATUS_FLAG_RH != 0x00;
   if(rh_mode != data.is_rh_mode) {
     data.is_rh_mode = rh_mode;
     data.updated = now;
   }
 
 
-  boolean heating_mode = status & VX_STATUS_FLAG_HEATING_MODE;
+  boolean heating_mode = status & VX_STATUS_FLAG_HEATING_MODE != 0x00;
   if(heating_mode != data.is_heating_mode){
     data.is_heating_mode = heating_mode;
     data.updated = now;
   }
   
-  boolean filter = status & VX_STATUS_FLAG_FILTER;
+  boolean filter = status & VX_STATUS_FLAG_FILTER != 0x00;
   if(filter != data.is_filter) {
     data.is_filter = filter;
     data.updated = now;
   }
   
-  boolean heating = status & VX_STATUS_FLAG_HEATING;
+  boolean heating = status & VX_STATUS_FLAG_HEATING != 0x00;
   if(heating != data.is_heating) {
     data.is_heating = heating;
     data.updated = now;
   }
   
-  boolean fault = status & VX_STATUS_FLAG_FAULT;
+  boolean fault = status & VX_STATUS_FLAG_FAULT != 0x00;
   if(fault != data.is_fault) {
     data.is_fault = fault;
     data.updated = now;
   }
   
-  boolean service = status & VX_STATUS_FLAG_SERVICE;
+  boolean service = status & VX_STATUS_FLAG_SERVICE != 0x00;
   if(service != data.is_service) {
     data.is_service = service;
     data.updated = now;

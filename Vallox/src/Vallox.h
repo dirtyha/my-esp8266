@@ -57,11 +57,18 @@
 
 class Vallox {
   public:
-    Vallox(byte rx, byte tx);
+    // constructors
+    Vallox(byte rx, byte tx); // RX & TX pins for SoftwareSerial e.g. D1 & D2
     Vallox(byte rx, byte tx, boolean isDebug);
 
-    // get data from memory
-    unsigned long getUpdated(); // time when data was updated
+    // initializes data by polling
+    // call only once and use loop() afterwards to keep up-to-date
+    void init();
+    // listen bus for data that arrives without polling
+    void loop();
+
+    // get data from cache
+    unsigned long getUpdated(); // time when data was last updated
     int getInsideTemp();
     int getOutsideTemp();
     int getIncomingTemp();
@@ -80,7 +87,6 @@ class Vallox {
     int getServicePeriod();
     int getServiceCounter();
     int getHeatingTarget();
-    byte getVariable(byte variable);
 
     // set data in Vallox bus
     void setFanSpeed(int speed);
@@ -94,18 +100,12 @@ class Vallox {
     void setServicePeriod(int months);
     void setServiceCounter(int months);
     void setHeatingTarget(int temp);
-    void setVariable(byte variable, byte value);
-
-    // initialize data - this polls and inits all data
-    void init();
-    // listen bus for data that arrives without polling
-    void loop();
 
   private:
     SoftwareSerial* serial;
     boolean isDebug = false;
     
-    // measured data from ValloxDSE
+    // data cache
     struct {
       unsigned long updated;
 
@@ -131,6 +131,9 @@ class Vallox {
       int heating_target;
     } data;
 
+	// generic setter
+    void setVariable(byte variable, byte value);
+	
     // pollers
     boolean pollIsOn();
     boolean pollIsRhMode();
@@ -150,6 +153,8 @@ class Vallox {
     int pollServicePeriod();
     int pollServiceCounter();
     int pollHeatingTarget();
+
+	// generic poller
     byte pollVariable(byte variable);
 
     // conversions
