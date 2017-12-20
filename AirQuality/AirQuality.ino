@@ -1,18 +1,18 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
+#include <ArduinoJson.h>
 #include <SDS011.h>
 #include "xCredentials.h"
 
 #define DEVICE_TYPE "SDS011"
+#define JSON_BUFFER_LENGTH 100
 
 float pm10, pm10_10m_sum, pm10_24h_sum;
 int pm10_10m_count, pm10_24h_count;
 float pm25, pm25_10m_sum, pm25_24h_sum;
 int pm25_10m_count, pm25_24h_count;
-int error;
 
 const char publishTopic[] = "iot-2/evt/status/fmt/json";
-
 char server[] = ORG ".messaging.internetofthings.ibmcloud.com";
 char authMethod[] = "use-token-auth";
 char token[] = TOKEN;
@@ -20,10 +20,14 @@ char clientId[] = "d:" ORG ":" DEVICE_TYPE ":" DEVICE_ID;
 
 WiFiClient wifiClient;
 PubSubClient client(server, 1883, wifiClient);
-SDS011 my_sds;
+SDS011 sds;
+
+unsigned long lastPublish = 0;
+unsigned long last10mCheck = 0;
+unsigned long last24hCheck = 0;
 
 void setup() {
-  my_sds.begin(D1, D2);
+  sds.begin(D1, D2);
   Serial.begin(9600);
 
   wifiConnect();
@@ -32,16 +36,12 @@ void setup() {
   Serial.println("Setup done.");
 }
 
-long lastPublishMillis = 0;
-long last10mMillis = 0;
-long last24hMillis = 0;
 void loop() {
-  long now = millis();
+  unsigned long now = millis();
 
-  error = my_sds.read(&pm25, &pm10);
-  if (! error) {
-//    Serial.println("PM2.5: " + String(pm25));
-//    Serial.println("P10:  " + String(pm10));
+  if (!sds.read(&pm25, &pm10)) {
+    //    Serial.println("PM2.5: " + String(pm25));
+    //    Serial.println("P10:  " + String(pm10));
 
     pm10_10m_sum += pm10;
     pm10_10m_count++;
@@ -53,29 +53,29 @@ void loop() {
     pm25_24h_sum += pm25;
     pm25_24h_count++;
 
-    if (now - last10mMillis > 10 * 60 * 1000) {
+    if (!client.loop()) {
+      mqttConnect();
+    }
+
+    if (now - last10mCheck > 10 * 60 * 1000) {
+      last10mCheck = now;
       if (publish10mData()) {
         pm10_10m_sum = 0.0;
         pm10_10m_count = 0;
         pm25_10m_sum = 0.0;
         pm25_10m_count = 0;
       }
-      last10mMillis = now;
     }
 
-    if (now - last24hMillis > 24 * 60 * 60 * 1000) {
+    if (now - last24hCheck > 24 * 60 * 60 * 1000) {
+      last24hCheck = now;
       if (publish24hData()) {
         pm10_24h_sum = 0.0;
         pm10_24h_count = 0;
         pm25_24h_sum = 0.0;
         pm25_24h_count = 0;
       }
-      last24hMillis = now;
     }
-  }
-
-  if (!client.loop()) {
-    mqttConnect();
   }
 }
 
@@ -102,49 +102,54 @@ void mqttConnect() {
 }
 
 boolean publish10mData() {
+  boolean ret = true;
 
   float pm10_10m_avg = pm10_10m_sum / pm10_10m_count;
   float pm25_10m_avg = pm25_10m_sum / pm25_10m_count;
 
-  // construct a JSON response
-  String json = "{\"d\":{";
-  json += "\"PM25_10M\":";
-  json += pm25_10m_avg;
-  json += ",\"PM10_10M\":";
-  json += pm10_10m_avg;
-  json += "}}";
+  StaticJsonBuffer<JSON_BUFFER_LENGTH> jsonBuffer;
+  JsonObject& root = jsonBuffer.createObject();
+  JsonObject& d = root.createNestedObject("d");
 
-  if (client.publish(publishTopic, (char*) json.c_str())) {
-    Serial.println("Publish 10m data OK");
+  d["PM25_10M"] = pm25_10m_avg;
+  d["PM10_10M"] = pm10_10m_avg;
 
-    return true;
-  } else {
-    Serial.println("Publish 10m data FAILED");
+  //  Serial.println("Publish payload:"); root.prettyPrintTo(Serial); Serial.println();
 
-    return false;
+  char buff[JSON_BUFFER_LENGTH];
+  root.printTo(buff, JSON_BUFFER_LENGTH);
+
+  if (!client.publish(publishTopic, buff)) {
+    Serial.println("Publish FAILED");
+    ret = false;
   }
+
+  return ret;
 }
 
 boolean publish24hData() {
+  boolean ret = true;
+  
   float pm10_24h_avg = pm10_24h_sum / pm10_24h_count;
   float pm25_24h_avg = pm25_24h_sum / pm25_24h_count;
 
-  // construct a JSON response
-  String json = "{\"d\":{";
-  json += "\"PM25_24H\":";
-  json += pm25_24h_avg;
-  json += ",\"PM10_24H\":";
-  json += pm10_24h_avg;
-  json += "}}";
+  StaticJsonBuffer<JSON_BUFFER_LENGTH> jsonBuffer;
+  JsonObject& root = jsonBuffer.createObject();
+  JsonObject& d = root.createNestedObject("d");
 
-  if (client.publish(publishTopic, (char*) json.c_str())) {
-    Serial.println("Publish 24h data OK");
+  d["PM25_24H"] = pm25_24h_avg;
+  d["PM10_24H"] = pm10_24h_avg;
 
-    return true;
-  } else {
-    Serial.println("Publish 24h data FAILED");
+  //  Serial.println("Publish payload:"); root.prettyPrintTo(Serial); Serial.println();
 
-    return false;
+  char buff[JSON_BUFFER_LENGTH];
+  root.printTo(buff, JSON_BUFFER_LENGTH);
+
+  if (!client.publish(publishTopic, buff)) {
+    Serial.println("Publish FAILED");
+    ret = false;
   }
+
+  return ret;
 }
 

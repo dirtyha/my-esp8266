@@ -1,6 +1,8 @@
 // Vallox Digit SE monitoring and control for ESP8266
 // requires RS485 serial line adapter between ESP8266 <-> DigitSE
 // and account in Watson IoT platform
+// NOTE: MQTT message size is over 128 bytes. 
+// You must increase MQTT_MAX_PACKET_SIZE to 256 in PubSubClient.h
 
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>

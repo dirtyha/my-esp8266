@@ -1,15 +1,15 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
-#include "DHT.h"
-#include "xADC.h"
+#include <ArduinoJson.h>
+#include <DHT.h>
 #include "xCredentials.h"
 
 #define DHTPIN 4     // what digital pin the DHT22 is conected to
 #define DHTTYPE DHT22   // there are multiple kinds of DHT sensors
 #define DEVICE_TYPE "DHT22"
+#define JSON_BUFFER_LENGTH 50
 
 const char publishTopic[] = "iot-2/evt/status/fmt/json";
-
 char server[] = ORG ".messaging.internetofthings.ibmcloud.com";
 char authMethod[] = "use-token-auth";
 char token[] = TOKEN;
@@ -23,63 +23,33 @@ typedef struct {
   float ta;
   float td;
   float rh;
-  float u;
 } dht_result;
+dht_result result;
 
 void setup() {
-  Serial.begin(9600);
-  while (!Serial) {}
-
-  wifiConnect();
-  mqttConnect();
-
-  publishData();
-
-  mqttDisconnect();
-  wifiDisconnect();
+  if (wifiConnect()) {
+    if (mqttConnect()) {
+      publishData();
+      mqttDisconnect();
+    }
+    wifiDisconnect();
+  }
 
   // sleep 10 minutes
   ESP.deepSleep(600e6);
 }
 
-/*
-  void setup() {
-  Serial.begin(9600);
-  Serial.setTimeout(2000);
-  while (!Serial) {}
-
-  wifiConnect();
-  mqttConnect();
-
-  Serial.println("Setup done.");
-  }
-*/
-
 void loop() {
 }
 
-/*
-long lastPublishMillis = 0;
-void loop() {
-  if (millis() - lastPublishMillis > 60000) {
-    publishData();
-    lastPublishMillis = millis();
-  }
-
-  if (!client.loop()) {
-    mqttConnect();
-  }
-}
-*/
-
-void wifiConnect() {
-//  Serial.print("Connecting to "); Serial.print(ssid);
+boolean wifiConnect() {
   WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
+  int tryCount = 10;
+  while (tryCount-- > 0 && WiFi.status() != WL_CONNECTED) {
     delay(500);
-//    Serial.print(".");
   }
-//  Serial.print("WiFi connected, IP address: "); Serial.println(WiFi.localIP());
+
+  return tryCount > 0;
 }
 
 void wifiDisconnect() {
@@ -88,15 +58,13 @@ void wifiDisconnect() {
   }
 }
 
-void mqttConnect() {
-  if (!!!client.connected()) {
-//    Serial.print("Reconnecting MQTT client to "); Serial.println(server);
-    while (!!!client.connect(clientId, authMethod, token)) {
-//      Serial.print(".");
-      delay(500);
-    }
-//    Serial.println();
+boolean mqttConnect() {
+  int tryCount = 10;
+  while (tryCount-- > 0 && !!!client.connect(clientId, authMethod, token)) {
+    delay(500);
   }
+
+  return tryCount > 0;
 }
 
 void mqttDisconnect() {
@@ -106,53 +74,36 @@ void mqttDisconnect() {
 }
 
 void publishData() {
-  dht_result* result = poll();
-  if (result != NULL) {
-    // construct a JSON response
-    String json = "{\"d\":{";
-    json += "\"TA\":";
-    json += result->ta;
-    json += ",\"Td\":";
-    json += result->td;
-    json += ",\"RH\":";
-    json += result->rh;
-    json += ",\"U\":";
-    json += result->u;
-    json += "}}";
+  dht_result* r = poll();
+  if (r != NULL) {
+    StaticJsonBuffer<JSON_BUFFER_LENGTH> jsonBuffer;
+    JsonObject& root = jsonBuffer.createObject();
+    JsonObject& d = root.createNestedObject("d");
 
-    if (client.publish(publishTopic, (char*) json.c_str())) {
-//      Serial.println("Publish OK");
-    } else {
-//      Serial.println("Publish FAILED");
-    }
+    d["TA"] = r->ta;
+    d["Td"] = r->td;
+    d["RH"] = r->rh;
+
+    char buff[JSON_BUFFER_LENGTH];
+    root.printTo(buff, JSON_BUFFER_LENGTH);
+    client.publish(publishTopic, buff);
   }
 }
 
 dht_result* poll() {
-  int count = 10;
-  while (count-- > 0) {
+  int tryCount = 10;
+  while (tryCount-- > 0) {
     float rh = dht.readHumidity();
     float ta = dht.readTemperature();
 
-//    Serial.print("TA = "); Serial.println(ta);
-//    Serial.print("RH = "); Serial.println(rh);
-
     if (isnan(rh) || isnan(ta)) {
-//      Serial.println("Failed to read from DHT sensor!");
       delay(2000);
     } else {
-      dht_result* ret = (dht_result*)malloc(sizeof(dht_result));
-      if (ret != NULL) {
+      result.rh = rh;
+      result.ta = ta;
+      result.td = calculateTd(rh, ta);
 
-        ret->rh = rh;
-        ret->ta = ta;
-        ret->u = ESP.getVcc() / 1000.0;
-        ret->td = calculateTd(rh, ta);
-
-        return ret;
-      } else {
-//        Serial.println("Malloc failed.");
-      }
+      return &result;
     }
   }
 
