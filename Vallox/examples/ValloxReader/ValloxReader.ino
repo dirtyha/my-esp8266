@@ -27,9 +27,11 @@ void loop() {
   // setters follow pattern set<variable_name>()
   // see prettyPrint for available variables
   unsigned long now = millis();
-  if (now - lastCheck > 60000 && !anybodyHome() && vx.getFanSpeed() > 1) {
-	lastCheck = now;
-    vx.setFanSpeed(1);
+  if (now - lastCheck > 60000) {
+    lastCheck = now;
+    if (!anybodyHome() && vx.getFanSpeed() > 1) {
+      vx.setFanSpeed(1);
+    }
   }
 }
 
