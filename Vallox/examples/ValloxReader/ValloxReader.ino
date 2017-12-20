@@ -1,14 +1,12 @@
 #include <Vallox.h>
 
 Vallox vx(D1, D2); // RX & TX pins
-unsigned long lastUpdated;
+unsigned long lastUpdated = 0;
 
 void setup() {
   Serial.begin(9600);
 
   vx.init();
-  lastUpdated = vx.getUpdated();
-  prettyPrint();
 
   Serial.println("Setup done.");
 }
@@ -20,24 +18,25 @@ void loop() {
 
   unsigned long newUpdate = vx.getUpdated();
   if (lastUpdated != newUpdate) {
-    // data hash changed
+    // data has changed
     lastUpdated = newUpdate;
     prettyPrint();
   }
 
-  // send data from arduino
-  // setters follow pattern setVariable() - see prettyPrint for available variables
-  int fanSpeed = vx.getFanSpeed();
+  // send data from arduino to Vallox bus
+  // setters follow pattern set<variable_name>()
+  // see prettyPrint for available variables
   if (!anybodyHome() && vx.getFanSpeed() > 1) {
     vx.setFanSpeed(1);
   }
 }
 
+// mock
 boolean anybodyHome() {
   return false;
 }
 
-// getters follow pattern getVariable()
+// getters follow pattern get<variable_name>()
 void prettyPrint() {
   Serial.print("Inside temperature (C) = "); Serial.println(vx.getInsideTemp());
   Serial.print("Outside temperature (C) = "); Serial.println(vx.getOutsideTemp());
