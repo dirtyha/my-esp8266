@@ -10,10 +10,10 @@
 #define JSON_BUFFER_LENGTH 50
 
 const char publishTopic[] = "iot-2/evt/status/fmt/json";
-char server[] = ORG ".messaging.internetofthings.ibmcloud.com";
-char authMethod[] = "use-token-auth";
-char token[] = TOKEN;
-char clientId[] = "d:" ORG ":" DEVICE_TYPE ":" DEVICE_ID;
+const char server[] = ORG ".messaging.internetofthings.ibmcloud.com";
+const char authMethod[] = "use-token-auth";
+const char token[] = TOKEN;
+const char clientId[] = "d:" ORG ":" DEVICE_TYPE ":" DEVICE_ID;
 
 WiFiClient wifiClient;
 PubSubClient client(server, 1883, wifiClient);
@@ -49,7 +49,12 @@ boolean wifiConnect() {
     delay(500);
   }
 
-  return tryCount > 0;
+  if(tryCount > 0) {
+    WiFi.mode(WIFI_STA);
+    return true;
+  } else {
+    return false;
+  }
 }
 
 void wifiDisconnect() {
@@ -60,7 +65,7 @@ void wifiDisconnect() {
 
 boolean mqttConnect() {
   int tryCount = 10;
-  while (tryCount-- > 0 && !!!client.connect(clientId, authMethod, token)) {
+  while (tryCount-- > 0 && !client.connect(clientId, authMethod, token)) {
     delay(500);
   }
 

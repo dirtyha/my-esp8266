@@ -16,14 +16,13 @@
 #define JSON_BUFFER_LENGTH 300
 #define DEBUG true
 
+// watson iot stuff
 const char publishTopic[] = "iot-2/evt/status/fmt/json";          // publish measurements here
 const char updateTopic[] = "iot-2/cmd/update/fmt/json";           // subscribe for update command
-
-// watson iot stuff
-char server[] = ORG ".messaging.internetofthings.ibmcloud.com";
-char authMethod[] = "use-token-auth";
-char token[] = TOKEN;
-char clientId[] = "d:" ORG ":" DEVICE_TYPE ":" DEVICE_ID;
+const char server[] = ORG ".messaging.internetofthings.ibmcloud.com";
+const char authMethod[] = "use-token-auth";
+const char token[] = TOKEN;
+const char clientId[] = "d:" ORG ":" DEVICE_TYPE ":" DEVICE_ID;
 
 WiFiClient wifiClient;
 void myCallback(char* topic, byte* payload, unsigned int payloadLength);
