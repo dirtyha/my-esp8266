@@ -27,14 +27,13 @@ WiFiClient wifiClient;
 void myCallback(char* topic, byte* payload, unsigned int payloadLength);
 PubSubClient client(server, 1883, myCallback, wifiClient);
 Vallox vx(D1, D2, DEBUG);
-unsigned long lastUpdated;
+unsigned long lastUpdated = 0;
 
 void setup() {
   Serial.begin(9600);
 
   wifiConnect();
   vx.init();
-  lastUpdated = vx.getUpdated();
   mqttConnect();
 
   Serial.println("Setup done.");
@@ -56,19 +55,7 @@ void loop() {
     if (publishData()) {
       lastUpdated = newUpdate;
     }
-    if (DEBUG) {
-      prettyPrint();
-    }
   }
-}
-
-void prettyPrint() {
-  Serial.print("Inside air T="); Serial.print(vx.getInsideTemp()); Serial.print(", ");
-  Serial.print("Outside air T="); Serial.print(vx.getOutsideTemp()); Serial.print(", ");
-  Serial.print("Inbound air T="); Serial.print(vx.getIncomingTemp()); Serial.print(", ");
-  Serial.print("Outbound air T="); Serial.print(vx.getExhaustTemp()); Serial.print(", ");
-  Serial.print("Fan speed="); Serial.print(vx.getFanSpeed());
-  Serial.println();
 }
 
 void wifiConnect() {
@@ -173,9 +160,45 @@ void handleUpdate(byte * payload) {
   }
 
   JsonObject& d = root["d"];
-  if (d.containsKey("speed")) {
-    int speed = d["speed"];
+  if (d.containsKey("ON")) {
+    boolean isOn = d["ON"];
+    if(isOn) {
+      vx.setOn();
+    } else {
+      vx.setOff();
+    }
+  }
+  if (d.containsKey("RH_MODE")) {
+    boolean isOn = d["RH_MODE"];
+    if(isOn) {
+      vx.setRhModeOn();
+    } else {
+      vx.setRhModeOff();
+    }
+  }
+  if (d.containsKey("HEATING_MODE")) {
+    boolean isOn = d["HEATING_MODE"];
+    if(isOn) {
+      vx.setHeatingModeOn();
+    } else {
+      vx.setHeatingModeOff();
+    }
+  }
+  if (d.containsKey("SPEED")) {
+    int speed = d["SPEED"];
     vx.setFanSpeed(speed);
+  }
+  if (d.containsKey("HEATING_TARGET")) {
+    int ht = d["HEATING_TARGET"];
+    vx.setHeatingTarget(ht);
+  }
+  if (d.containsKey("SERVICE_PERIOD")) {
+    int sp = d["SERVICE_PERIOD"];
+    vx.setServicePeriod(sp);
+  }
+  if (d.containsKey("SERVICE_COUNTER")) {
+    int sc = d["SERVICE_COUNTER"];
+    vx.setServiceCounter(sc);
   }
 }
 

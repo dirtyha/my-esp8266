@@ -167,9 +167,9 @@ void Vallox::setServiceCounter(int months) {
 }
 
 void Vallox::setHeatingTarget(int cel) {
-  if (cel >= 5 && cel <= 22) {
-    byte ntc = cel2Ntc(cel);
-    setVariable(VX_VARIABLE_HEATING_TARGET, ntc);
+  if (cel >= 10 && cel <= 27) {
+    byte hex = htCel2Hex(cel);
+    setVariable(VX_VARIABLE_HEATING_TARGET, hex);
     data.heating_target = cel;
   }
 }
@@ -255,59 +255,63 @@ int Vallox::getHeatingTarget() {
 // pollers poll data from the bus
 
 int Vallox::pollInsideTemp() {
-  return pollVariable(VX_VARIABLE_T_INSIDE);
+  byte ntc = pollVariable(VX_VARIABLE_T_INSIDE);
+  return ntc2Cel(ntc);
 }
 
 int Vallox::pollOutsideTemp() {
-  return pollVariable(VX_VARIABLE_T_OUTSIDE);
+  byte ntc = pollVariable(VX_VARIABLE_T_OUTSIDE);
+  return ntc2Cel(ntc);
 }
 
 int Vallox::pollIncomingTemp() {
-  return pollVariable(VX_VARIABLE_T_INCOMING);
+  byte ntc = pollVariable(VX_VARIABLE_T_INCOMING);
+  return ntc2Cel(ntc);
 }
 
 int Vallox::pollExhaustTemp() {
-  return pollVariable(VX_VARIABLE_T_EXHAUST);
+  byte ntc = pollVariable(VX_VARIABLE_T_EXHAUST);
+  return ntc2Cel(ntc);
 }
 
 boolean Vallox::pollIsOn() {
   byte status = pollVariable(VX_VARIABLE_STATUS);
-  return status & VX_STATUS_FLAG_POWER != 0x00;
+  return (status & VX_STATUS_FLAG_POWER) != 0x00;
 }
 
 boolean Vallox::pollIsRhMode() {
   byte status = pollVariable(VX_VARIABLE_STATUS);
-  return status & VX_STATUS_FLAG_RH != 0x00;
+  return (status & VX_STATUS_FLAG_RH) != 0x00;
 }
 
 boolean Vallox::pollIsHeatingMode() {
   byte status = pollVariable(VX_VARIABLE_STATUS);
-  return status & VX_STATUS_FLAG_HEATING_MODE != 0x00;
+  return (status & VX_STATUS_FLAG_HEATING_MODE) != 0x00;
 }
 
 boolean Vallox::pollIsSummerMode() {
   byte io = pollVariable(VX_VARIABLE_IO_08);
-  return io & 0x02 != 0x00;
+  return (io & 0x02) != 0x00;
 }
 
 boolean Vallox::pollIsFilter() {
   byte status = pollVariable(VX_VARIABLE_STATUS);
-  return status & VX_STATUS_FLAG_FILTER != 0x00;
+  return (status & VX_STATUS_FLAG_FILTER) != 0x00;
 }
 
 boolean Vallox::pollIsHeating() {
   byte status = pollVariable(VX_VARIABLE_STATUS);
-  return status & VX_STATUS_FLAG_HEATING != 0x00;
+  return (status & VX_STATUS_FLAG_HEATING) != 0x00;
 }
 
 boolean Vallox::pollIsFault() {
   byte status = pollVariable(VX_VARIABLE_STATUS);
-  return status & VX_STATUS_FLAG_FAULT != 0x00;
+  return (status & VX_STATUS_FLAG_FAULT) != 0x00;
 }
 
 boolean Vallox::pollIsService() {
   byte status = pollVariable(VX_VARIABLE_STATUS);
-  return status & VX_STATUS_FLAG_SERVICE != 0x00;
+  return (status & VX_STATUS_FLAG_SERVICE) != 0x00;
 }
 
 int Vallox::pollServicePeriod() {
@@ -340,8 +344,8 @@ int Vallox::pollRh() {
 }
 
 int Vallox::pollHeatingTarget() {
-  byte ntc = pollVariable(VX_VARIABLE_HEATING_TARGET);
-  return ntc2Cel(ntc);
+  byte hex = pollVariable(VX_VARIABLE_HEATING_TARGET);
+  return hex2HtCel(hex);
 }
 
 // private
@@ -491,7 +495,7 @@ void Vallox::decodeMessage(const byte message[]) {
   } else if (variable == VX_VARIABLE_STATUS) {
     decodeStatus(value);
   } else if (variable == VX_VARIABLE_IO_08) {
-    boolean summer_mode = value & 0x01 != 0x00;
+    boolean summer_mode = (value & 0x01) != 0x00;
     if(summer_mode != data.is_summer_mode) {
       data.is_summer_mode = summer_mode;
       data.updated = now;
@@ -513,7 +517,7 @@ void Vallox::decodeMessage(const byte message[]) {
       data.updated = now;
     }
   } else if (variable == VX_VARIABLE_HEATING_TARGET) {
-    int cel = ntc2Cel(value);
+    int cel = hex2HtCel(value);
     if(cel != data.heating_target) {
       data.heating_target = cel;
       data.updated = now;
@@ -526,44 +530,44 @@ void Vallox::decodeMessage(const byte message[]) {
 void Vallox::decodeStatus(byte status) {
   unsigned long now = millis();
   
-  boolean on = status & VX_STATUS_FLAG_POWER != 0x00;
+  boolean on = (status & VX_STATUS_FLAG_POWER) != 0x00;
   if(on != data.is_on) {
     data.is_on = on;
     data.updated = now;
   }
 
-  boolean rh_mode = status & VX_STATUS_FLAG_RH != 0x00;
+  boolean rh_mode = (status & VX_STATUS_FLAG_RH) != 0x00;
   if(rh_mode != data.is_rh_mode) {
     data.is_rh_mode = rh_mode;
     data.updated = now;
   }
 
 
-  boolean heating_mode = status & VX_STATUS_FLAG_HEATING_MODE != 0x00;
+  boolean heating_mode = (status & VX_STATUS_FLAG_HEATING_MODE) != 0x00;
   if(heating_mode != data.is_heating_mode){
     data.is_heating_mode = heating_mode;
     data.updated = now;
   }
   
-  boolean filter = status & VX_STATUS_FLAG_FILTER != 0x00;
+  boolean filter = (status & VX_STATUS_FLAG_FILTER) != 0x00;
   if(filter != data.is_filter) {
     data.is_filter = filter;
     data.updated = now;
   }
   
-  boolean heating = status & VX_STATUS_FLAG_HEATING != 0x00;
+  boolean heating = (status & VX_STATUS_FLAG_HEATING) != 0x00;
   if(heating != data.is_heating) {
     data.is_heating = heating;
     data.updated = now;
   }
   
-  boolean fault = status & VX_STATUS_FLAG_FAULT != 0x00;
+  boolean fault = (status & VX_STATUS_FLAG_FAULT) != 0x00;
   if(fault != data.is_fault) {
     data.is_fault = fault;
     data.updated = now;
   }
   
-  boolean service = status & VX_STATUS_FLAG_SERVICE != 0x00;
+  boolean service = (status & VX_STATUS_FLAG_SERVICE) != 0x00;
   if(service != data.is_service) {
     data.is_service = service;
     data.updated = now;
@@ -606,11 +610,55 @@ int Vallox::hex2FanSpeed(byte hex) {
 }
 
 int Vallox::hex2Rh(byte hex) {
-  if(hex >= 0x33) {
+  if (hex >= 0x33) {
     return (hex - 51) / 2.04;;
   } else {
     return NOT_SET;
   }
+}
+
+int Vallox::hex2HtCel(byte hex) {
+  if (hex == 0x01) {
+    return 10;
+  } else if (hex == 0x03) {
+    return 13;
+  } else if (hex == 0x07) {
+    return 15;
+  } else if (hex == 0x0F) {
+    return 18;
+  } else if (hex == 0x1F) {
+    return 20;
+  } else if (hex == 0x3F) {
+    return 23;
+  } else if (hex == 0x7F) {
+    return 25;
+  } else if (hex == 0xFF) {
+    return 27;
+  } else {
+	return NOT_SET;
+  }
+}
+
+byte Vallox::htCel2Hex(int htCel) {
+  if (htCel < 13) {
+    return 0x01;
+  } else if (htCel < 15) {
+    return 0x03;	  
+  } else if (htCel < 18) {
+    return 0x07;	  
+  } else if (htCel < 20) {
+    return 0x0F;	  
+  } else if (htCel < 23) {
+    return 0x1F;	  
+  } else if (htCel < 25) {
+    return 0x3F;	  
+  } else if (htCel < 27) {
+    return 0x7F;	  
+  } else if (htCel == 27) {
+    return 0xFF;
+  } else {
+    return 0x01;
+  }	  
 }
 
 // calculate VX message checksum

@@ -163,6 +163,8 @@ class Vallox {
     static int ntc2Cel(byte ntc);
     static byte cel2Ntc(int cel);
     static int hex2Rh(byte hex);
+    static int hex2HtCel(byte hex);
+    static byte htCel2Hex(int htCel);
 
     // read and decode messages
     boolean readMessage(byte message[]);
