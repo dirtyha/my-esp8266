@@ -32,6 +32,7 @@
 #define VX_VARIABLE_T_INCOMING 0x5B
 #define VX_VARIABLE_IO_08 0x08
 #define VX_VARIABLE_HEATING_TARGET 0xA4
+#define VX_VARIABLE_MIN_INCOMING_TEMP 0xA8
 
 // status flags of variable A3
 #define VX_STATUS_FLAG_POWER 0x01           // bit 0 read/write
@@ -80,13 +81,14 @@ class Vallox {
     boolean isFilter();
     boolean isHeating();
     boolean isFault();
-    boolean isService();
+    boolean isServiceNeeded();
     int getFanSpeed();
     int getDefaultFanSpeed();
     int getRh();
     int getServicePeriod();
     int getServiceCounter();
     int getHeatingTarget();
+    int getMinIncomingTemp();
 
     // set data in Vallox bus
     void setFanSpeed(int speed);
@@ -100,6 +102,7 @@ class Vallox {
     void setServicePeriod(int months);
     void setServiceCounter(int months);
     void setHeatingTarget(int temp);
+    void setMinIncomingTemp(int temp);
 
   private:
     SoftwareSerial* serial;
@@ -129,6 +132,7 @@ class Vallox {
       int service_period;
       int service_counter;
       int heating_target;
+      int min_t_incoming;
     } data;
 
 	// generic setter
@@ -153,6 +157,7 @@ class Vallox {
     int pollServicePeriod();
     int pollServiceCounter();
     int pollHeatingTarget();
+    int pollMinIncomingTemp();
 
 	// generic poller
     byte pollVariable(byte variable);

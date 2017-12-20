@@ -112,12 +112,13 @@ boolean publishData() {
   d["SUMMER_MODE"] = vx.isSummerMode();
   d["HEATING"] = vx.isHeating();
   d["FAULT"] = vx.isFault();
-  d["SERVICE"] = vx.isService();
+  d["SERVICE"] = vx.isServiceNeeded();
   d["SPEED"] = vx.getFanSpeed();
   d["DEFAULT_SPEED"] = vx.getDefaultFanSpeed();
   d["SERVICE_PERIOD"] = vx.getServicePeriod();
   d["SERVICE_COUNTER"] = vx.getServiceCounter();
   d["HEATING_TARGET"] = vx.getHeatingTarget();
+  d["MIN_T_INB"] = vx.getMinIncomingTemp();
 
   if (DEBUG) {
     Serial.println("Publish payload:"); root.prettyPrintTo(Serial); Serial.println();

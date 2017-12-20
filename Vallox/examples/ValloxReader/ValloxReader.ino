@@ -54,12 +54,13 @@ void prettyPrint() {
   Serial.print("Is filter dirty = "); vx.isFilter() ? Serial.println("yes") : Serial.println("no");
   Serial.print("Is heating = "); vx.isHeating() ? Serial.println("yes") : Serial.println("no");
   Serial.print("Is faulty = "); vx.isFault() ? Serial.println("yes") : Serial.println("no");
-  Serial.print("Needs service = "); vx.isService() ? Serial.println("yes") : Serial.println("no");
+  Serial.print("Needs service = "); vx.isServiceNeeded() ? Serial.println("yes") : Serial.println("no");
   Serial.print("Default fan speed (1-8) = "); Serial.println(vx.getDefaultFanSpeed());
   Serial.print("RH (%) = "); Serial.println(vx.getRh());
   Serial.print("Service period (months) = "); Serial.println(vx.getServicePeriod());
   Serial.print("Service count down (months) = "); Serial.println(vx.getServiceCounter());
   Serial.print("Heating target (C) = "); Serial.println(vx.getHeatingTarget());
+  Serial.print("Min. incoming temperature (C) = "); Serial.println(vx.getMinIncomingTemp());
   Serial.println();
 }
 
