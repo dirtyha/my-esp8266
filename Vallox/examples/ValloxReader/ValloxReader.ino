@@ -1,7 +1,8 @@
 #include <Vallox.h>
 
 Vallox vx(D1, D2); // RX & TX pins
-unsigned long lastUpdated = 0;
+unsigned long lastUpdate = 0;
+unsigned long lastCheck = 0;
 
 void setup() {
   Serial.begin(9600);
@@ -12,21 +13,22 @@ void setup() {
 }
 
 void loop() {
-
   // listen for data sent by mother boards or control panels
   vx.loop();
 
   unsigned long newUpdate = vx.getUpdated();
-  if (lastUpdated != newUpdate) {
+  if (lastUpdate != newUpdate) {
     // data has changed
-    lastUpdated = newUpdate;
+    lastUpdate = newUpdate;
     prettyPrint();
   }
 
   // send data from arduino to Vallox bus
   // setters follow pattern set<variable_name>()
   // see prettyPrint for available variables
-  if (!anybodyHome() && vx.getFanSpeed() > 1) {
+  unsigned long now = millis();
+  if (now - lastCheck > 60000 && !anybodyHome() && vx.getFanSpeed() > 1) {
+	lastCheck = now;
     vx.setFanSpeed(1);
   }
 }
