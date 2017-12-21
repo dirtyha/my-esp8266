@@ -252,10 +252,6 @@ int Vallox::getHeatingTarget() {
   return data.heating_target;
 }
 
-int Vallox::getMinIncomingTemp() {
-  return data.min_t_incoming;
-}
-
 // pollers poll data from the bus
 
 int Vallox::pollInsideTemp() {
@@ -350,11 +346,6 @@ int Vallox::pollRh() {
 int Vallox::pollHeatingTarget() {
   byte hex = pollVariable(VX_VARIABLE_HEATING_TARGET);
   return hex2HtCel(hex);
-}
-
-int Vallox::pollMinIncomingTemp() {
-  byte ntc = pollVariable(VX_VARIABLE_MIN_INCOMING_TEMP);
-  return ntc2Cel(ntc);
 }
 
 // private
@@ -529,12 +520,6 @@ void Vallox::decodeMessage(const byte message[]) {
     int cel = hex2HtCel(value);
     if(cel != data.heating_target) {
       data.heating_target = cel;
-      data.updated = now;
-    }
-  } else if (variable == VX_VARIABLE_MIN_INCOMING_TEMP) {
-    int cel = ntc2Cel(value);
-    if(cel != data.min_t_incoming) {
-      data.min_t_incoming = cel;
       data.updated = now;
     }
   } else {

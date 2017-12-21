@@ -60,7 +60,6 @@ void prettyPrint() {
   Serial.print("Service period (months) = "); Serial.println(vx.getServicePeriod());
   Serial.print("Service count down (months) = "); Serial.println(vx.getServiceCounter());
   Serial.print("Heating target (C) = "); Serial.println(vx.getHeatingTarget());
-  Serial.print("Min. incoming temperature (C) = "); Serial.println(vx.getMinIncomingTemp());
   Serial.println();
 }
 

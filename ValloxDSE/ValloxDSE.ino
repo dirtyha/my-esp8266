@@ -118,7 +118,6 @@ boolean publishData() {
   d["SERVICE_PERIOD"] = vx.getServicePeriod();
   d["SERVICE_COUNTER"] = vx.getServiceCounter();
   d["HEATING_TARGET"] = vx.getHeatingTarget();
-  d["MIN_T_INB"] = vx.getMinIncomingTemp();
 
   if (DEBUG) {
     Serial.println("Publish payload:"); root.prettyPrintTo(Serial); Serial.println();
