@@ -12,7 +12,7 @@
 #define VX_MSG_DOMAIN 0x01
 #define VX_MSG_POLL_BYTE 0x00
 #define NOT_SET -999
-#define POLL_INTERVAL 60000 // in ms
+#define POLL_INTERVAL 600000 // in ms
 
 // senders and receivers
 #define VX_MSG_MAINBOARD_1 0x11
