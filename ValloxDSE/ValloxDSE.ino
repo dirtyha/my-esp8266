@@ -13,7 +13,7 @@
 #include "xCredentials.h" 
 
 #define DEVICE_TYPE "VentillationMachine"
-#define JSON_BUFFER_LENGTH 300
+#define JSON_BUFFER_LENGTH 350
 #define DEBUG true
 
 // watson iot stuff
@@ -37,7 +37,7 @@ void setup() {
   vx.init();
   mqttConnect();
 
-  Serial.println("Setup done.");
+  Serial.println("Setup done");
 }
 
 void loop() {
@@ -101,13 +101,9 @@ boolean publishData() {
   d["T_OUT"] = vx.getOutsideTemp();
   d["T_INB"] = vx.getIncomingTemp();
   d["T_OUTB"] = vx.getExhaustTemp();
-
-  if (vxIsSet(vx.getRh())) {
-    d["RH"] = vx.getRh();
-  }
-
   d["ON"] = vx.isOn();
   d["RH_MODE"] = vx.isRhMode();
+  d["RH"] = vx.getRh();
   d["HEATING_MODE"] = vx.isHeatingMode();
   d["SUMMER_MODE"] = vx.isSummerMode();
   d["HEATING"] = vx.isHeating();

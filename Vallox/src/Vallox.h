@@ -11,7 +11,8 @@
 #define VX_MSG_LENGTH 6
 #define VX_MSG_DOMAIN 0x01
 #define VX_MSG_POLL_BYTE 0x00
-#define NOT_SET -999;
+#define NOT_SET -999
+#define POLL_INTERVAL 60000 // in ms
 
 // senders and receivers
 #define VX_MSG_MAINBOARD_1 0x11
@@ -23,7 +24,7 @@
 #define VX_VARIABLE_STATUS 0xA3
 #define VX_VARIABLE_FAN_SPEED 0x29
 #define VX_VARIABLE_DEFAULT_FAN_SPEED 0xA9
-#define VX_VARIABLE_RH 0x2F
+#define VX_VARIABLE_RH 0x4C
 #define VX_VARIABLE_SERVICE_PERIOD 0xA6
 #define VX_VARIABLE_SERVICE_COUNTER 0xAB
 #define VX_VARIABLE_T_OUTSIDE 0x58
@@ -104,6 +105,7 @@ class Vallox {
   private:
     SoftwareSerial* serial;
     boolean isDebug = false;
+	unsigned long lastPolled = 0;
     
     // data cache
     struct {
@@ -138,24 +140,25 @@ class Vallox {
     boolean pollIsOn();
     boolean pollIsRhMode();
     boolean pollIsHeatingMode();
-    boolean pollIsSummerMode();
     boolean pollIsFilter();
     boolean pollIsHeating();
     boolean pollIsFault();
     boolean pollIsService();
+    boolean pollIsSummerMode();
 	int pollInsideTemp();
 	int pollOutsideTemp();
 	int pollIncomingTemp();
 	int pollExhaustTemp();
     int pollFanSpeed();
     int pollDefaultFanSpeed();
-    int pollRh();
     int pollServicePeriod();
-    int pollServiceCounter();
     int pollHeatingTarget();
+    int pollRh();
+    int pollServiceCounter();
 
 	// generic poller
     byte pollVariable(byte variable);
+    boolean pollVariable2(byte variable, byte* value);
 
     // conversions
     static byte fanSpeed2Hex(int fan);
@@ -172,6 +175,8 @@ class Vallox {
     void decodeStatus(byte status);
 
     // helpers
+    void checkChange(boolean* oldValue, boolean newValue);
+    void checkChange(int* oldValue, int newValue);
     static byte calculateCheckSum(const byte message[]);
     void prettyPrint(const byte message[]);
 };
