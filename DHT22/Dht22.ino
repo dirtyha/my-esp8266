@@ -7,7 +7,7 @@
 #define DHTPIN 4     // what digital pin the DHT22 is conected to
 #define DHTTYPE DHT22   // there are multiple kinds of DHT sensors
 #define DEVICE_TYPE "DHT22"
-#define JSON_BUFFER_LENGTH 50
+#define JSON_BUFFER_LENGTH 100
 
 const char publishTopic[] = "iot-2/evt/status/fmt/json";
 const char server[] = ORG ".messaging.internetofthings.ibmcloud.com";
@@ -44,12 +44,12 @@ void loop() {
 
 boolean wifiConnect() {
   WiFi.begin(ssid, password);
-  int tryCount = 10;
+  int tryCount = 20;
   while (tryCount-- > 0 && WiFi.status() != WL_CONNECTED) {
     delay(500);
   }
 
-  if(tryCount > 0) {
+  if (tryCount > 0) {
     WiFi.mode(WIFI_STA);
     return true;
   } else {
@@ -91,6 +91,7 @@ void publishData() {
 
     char buff[JSON_BUFFER_LENGTH];
     root.printTo(buff, JSON_BUFFER_LENGTH);
+
     client.publish(publishTopic, buff);
   }
 }
