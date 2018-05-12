@@ -2,20 +2,24 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <LaCrosse_TX23.h>
+#include <DHT.h>
 #include "xCredentials.h"
 
-#define JSON_BUFFER_LENGTH 100
+#define DHTPIN D3     // what digital pin the DHT22 is conected to
+#define DHTTYPE DHT22   // there are multiple kinds of DHT sensors
+#define JSON_BUFFER_LENGTH 150
+#define DEVICE_TYPE "WeatherStation"
 
-const char publishTopic[] = "iot-2/evt/status/fmt/json";
-const char server[] = ORG ".messaging.internetofthings.ibmcloud.com";
-const char authMethod[] = "use-token-auth";
-const char token[] = TOKEN;
-const char clientId[] = "d:" ORG ":" DEVICE_ID;
+char server[] = "myhomeat.cloud";
+char authMethod[] = "use-token-auth";
+char token[] = TOKEN;
+char clientId[] = "d:" DEVICE_TYPE ":" DEVICE_ID;
+const char publishTopic[] = "events/" DEVICE_TYPE "/" DEVICE_ID;
 
 WiFiClient wifiClient;
 PubSubClient client(server, 1883, wifiClient);
-//DATA wire connected to arduino port 10
-LaCrosse_TX23 tx23 = LaCrosse_TX23(10);
+LaCrosse_TX23 tx23 = LaCrosse_TX23(D2);
+DHT dht(DHTPIN, DHTTYPE);
 unsigned long lastRead = 0;
 unsigned long lastSent = 0;
 
@@ -24,89 +28,110 @@ void setup() {
   Serial.begin(57600);
   while (!Serial) {}
 
-//  wifiConnect();
-//  mqttConnect();
+  wifiConnect();
+  mqttConnect();
 
+  Serial.println("Setup done.");
 }
 
 void loop() {
   unsigned long now = millis();
-  bool isOk;
-  float ws;
-  int wd;
 
-  if (now - lastRead > 5000) {
-    // read data from analog input
-    lastRead = now;
-
-    isOk = tx23.read(ws, wd);
-    Serial.print("WS = "); Serial.print(ws);
-    Serial.print(", WD = "); Serial.println(wd);
-  }
-
-/*
   if (now - lastSent > 60000) {
+    lastSent = now;
+
+    Serial.println("Measuring...");
+
+    float ta, td = NAN, rh;
+    int tryCount = 10;
+    while (tryCount-- > 0) {
+      rh = dht.readHumidity();
+      ta = dht.readTemperature();
+
+      if (isnan(rh) || isnan(ta)) {
+        Serial.println("Failed to read DHT22.");
+        delay(2000);
+      } else {
+        td = calculateTd(rh, ta);
+        tryCount = 0;
+      }
+    }
+
+    float ws, f_wd;
+    int i_wd;
+    bool isOk = tx23.read(ws, i_wd);
+    if (isOk) {
+      f_wd = 22.5 * i_wd;
+    } else {
+      Serial.println("Failed to read TX23.");
+      ws = NAN;
+      f_wd = NAN;
+    }
+
     // reconnect and send data
     if (!client.loop()) {
       mqttConnect();
     }
-
-    lastSent = now;
-    if(isOk) {
-      publishData(ws, wd);
-    }
+    publishData(ws, f_wd, ta, rh, td);
   }
-*/
 }
 
-boolean wifiConnect() {
+void wifiConnect() {
+  Serial.print("Connecting to "); Serial.print(ssid);
   WiFi.begin(ssid, password);
-  int tryCount = 20;
-  while (tryCount-- > 0 && WiFi.status() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED) {
     delay(500);
+    Serial.print(".");
   }
+  WiFi.mode(WIFI_STA);
+  Serial.print("WiFi connected, IP address: "); Serial.println(WiFi.localIP());
+}
 
-  if (tryCount > 0) {
-    WiFi.mode(WIFI_STA);
-    return true;
-  } else {
-    return false;
+void mqttConnect() {
+  if (!!!client.connected()) {
+    Serial.print("Reconnecting MQTT client to "); Serial.println(server);
+    int retryCount = 60;
+    while (!!!client.connect(clientId, authMethod, token) && --retryCount > 0) {
+      Serial.print(".");
+      delay(500);
+    }
+    Serial.println();
   }
 }
 
-void wifiDisconnect() {
-  if (WiFi.status() == WL_CONNECTED) {
-    WiFi.disconnect();
-  }
-}
-
-boolean mqttConnect() {
-  int tryCount = 10;
-  while (tryCount-- > 0 && !client.connect(clientId, authMethod, token)) {
-    delay(500);
-  }
-
-  return tryCount > 0;
-}
-
-void mqttDisconnect() {
-  if (client.connected()) {
-    client.disconnect();
-  }
-}
-
-void publishData(float ws, int wd) {
+void publishData(float ws, float wd, float ta, float rh, float td) {
   StaticJsonBuffer<JSON_BUFFER_LENGTH> jsonBuffer;
   JsonObject& root = jsonBuffer.createObject();
   JsonObject& d = root.createNestedObject("d");
 
-  d["WS"] = ws;
-  d["WD"] = wd;
+  if (!isnan(ta)) {
+    d["TA"] = ta;
+  }
+  if (!isnan(rh)) {
+    d["RH"] = rh;
+  }
+  if (!isnan(td)) {
+    d["Td"] = td;
+  }
+  if (!isnan(ws)) {
+    d["WS"] = ws;
+  }
+  if (!isnan(wd)) {
+    d["WD"] = wd;
+  }
 
   char buff[JSON_BUFFER_LENGTH];
   root.printTo(buff, JSON_BUFFER_LENGTH);
+  Serial.print("Message = ");Serial.println(buff);
 
-  client.publish(publishTopic, buff);
+  if(client.publish(publishTopic, buff)) {
+    Serial.println("Publish ok.");
+  } else {
+    Serial.println("Publish failed.");
+  }
 }
 
+float calculateTd(float rh, float ta) {
+  return 243.04 * (log(rh / 100.0) + ((17.625 * ta) / (243.04 + ta))) / (17.625 - log(rh / 100.0) - ((17.625 * ta) / (243.04 + ta)));
+}
 

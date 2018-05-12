@@ -5,12 +5,12 @@
 
 #define DEVICE_TYPE "MY_GWM95R"
 
-char server[] = ORG ".messaging.internetofthings.ibmcloud.com";
+char server[] = "myhomeat.cloud";
 char authMethod[] = "use-token-auth";
 char token[] = TOKEN;
-char clientId[] = "d:" ORG ":" DEVICE_TYPE ":" DEVICE_ID;
+char clientId[] = "d:" DEVICE_TYPE ":" DEVICE_ID;
 
-const char publishTopic[] = "iot-2/evt/status/fmt/json";
+const char publishTopic[] = "events/" DEVICE_TYPE "/" DEVICE_ID;
 
 WiFiClient wifiClient;
 PubSubClient client(server, 1883, wifiClient);
@@ -107,6 +107,7 @@ void wifiConnect() {
     delay(500);
 //    Serial.print(".");
   }
+  WiFi.mode(WIFI_STA);
 //  Serial.print("WiFi connected, IP address: "); Serial.println(WiFi.localIP());
 }
 

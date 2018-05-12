@@ -12,11 +12,11 @@ int pm10_count;
 float pm25, pm25_sum;
 int pm25_count;
 
-const char publishTopic[] = "iot-2/evt/status/fmt/json";
-char server[] = ORG ".messaging.internetofthings.ibmcloud.com";
+const char publishTopic[] = "events/" DEVICE_TYPE "/" DEVICE_ID;
+char server[] = "myhomeat.cloud";
 char authMethod[] = "use-token-auth";
 char token[] = TOKEN;
-char clientId[] = "d:" ORG ":" DEVICE_TYPE ":" DEVICE_ID;
+char clientId[] = "d:" DEVICE_TYPE ":" DEVICE_ID;
 
 WiFiClient wifiClient;
 PubSubClient client(server, 1883, wifiClient);

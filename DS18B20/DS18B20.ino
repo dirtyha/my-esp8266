@@ -1,12 +1,13 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
-#include <DHT.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 #include "xCredentials.h"
 
-#define DHTPIN 4     // what digital pin the DHT22 is conected to
+#define ONE_WIRE_BUS D2
 #define DHTTYPE DHT22   // there are multiple kinds of DHT sensors
-#define DEVICE_TYPE "DHT22"
+#define DEVICE_TYPE "DS18B20"
 #define JSON_BUFFER_LENGTH 100
 
 const char publishTopic[] = "events/" DEVICE_TYPE "/" DEVICE_ID;
@@ -17,28 +18,22 @@ const char clientId[] = "d:" DEVICE_TYPE ":" DEVICE_ID;
 
 WiFiClient wifiClient;
 PubSubClient client(server, 1883, wifiClient);
-DHT dht(DHTPIN, DHTTYPE);
-
-typedef struct {
-  float ta;
-  float td;
-  float rh;
-} dht_result;
-dht_result result;
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature sensor(&oneWire);
 
 void setup() {
-  // sleep 60 minutes
-  unsigned long sleep = 3600e6;
+  // default sleep 30 minutes
+  unsigned long sleep = 1800e6;
 
   if (wifiConnect()) {
     if (mqttConnect()) {
-      dht_result* data = poll();
-      if (data != NULL) {
-        publishData(data);
-//        if (data->ta > 30) {
-//          // sleep 5 minutes when ta is raised
-//          sleep = 300e6;
-//        }
+      float ta = poll();
+      if (ta > -30 && ta < 100) {
+        publishData(ta);
+        if (ta > 30) {
+          // sleep only 2 minutes when ta up
+          sleep = 120e6;
+        }
       }
       mqttDisconnect();
     }
@@ -87,14 +82,12 @@ void mqttDisconnect() {
   }
 }
 
-void publishData(dht_result* data) {
+void publishData(float ta) {
   StaticJsonBuffer<JSON_BUFFER_LENGTH> jsonBuffer;
   JsonObject& root = jsonBuffer.createObject();
   JsonObject& d = root.createNestedObject("d");
 
-  d["TA"] = data->ta;
-  d["Td"] = data->td;
-  d["RH"] = data->rh;
+  d["TA"] = ta;
 
   char buff[JSON_BUFFER_LENGTH];
   root.printTo(buff, JSON_BUFFER_LENGTH);
@@ -102,27 +95,11 @@ void publishData(dht_result* data) {
   client.publish(publishTopic, buff);
 }
 
-dht_result* poll() {
-  int tryCount = 10;
-  while (tryCount-- > 0) {
-    float rh = dht.readHumidity();
-    float ta = dht.readTemperature();
+float poll() {
+  sensor.begin();
+  sensor.requestTemperatures();
 
-    if (isnan(rh) || isnan(ta)) {
-      delay(2000);
-    } else {
-      result.rh = rh;
-      result.ta = ta;
-      result.td = calculateTd(rh, ta);
-
-      return &result;
-    }
-  }
-
-  return NULL;
+  return sensor.getTempCByIndex(0);
 }
 
-float calculateTd(float rh, float ta) {
-  return 243.04 * (log(rh / 100.0) + ((17.625 * ta) / (243.04 + ta))) / (17.625 - log(rh / 100.0) - ((17.625 * ta) / (243.04 + ta)));
-}
 

@@ -7,13 +7,14 @@
 #define DEVICE_TYPE "MP3_Player"
 #define JSON_BUFFER_LENGTH 350
 #define DEBUG true
+#define DEVICE_ADDRESS 8
 
 // watson iot stuff
-const char updateTopic[] = "iot-2/cmd/update/fmt/json";           // subscribe for update command
-const char server[] = ORG ".messaging.internetofthings.ibmcloud.com";
+const char updateTopic[] = "cmd/" DEVICE_TYPE "/" DEVICE_ID;           // subscribe for update command
+const char server[] = "myhomeat.cloud";
 const char authMethod[] = "use-token-auth";
 const char token[] = TOKEN;
-const char clientId[] = "d:" ORG ":" DEVICE_TYPE ":" DEVICE_ID;
+const char clientId[] = "d:" DEVICE_TYPE ":" DEVICE_ID;
 
 WiFiClient wifiClient;
 void myCallback(char* topic, byte* payload, unsigned int payloadLength);
@@ -36,23 +37,23 @@ void loop() {
   }
 }
 
-void send(int volume, int buffer[], int size) {
-  Wire.beginTransmission(8); /* begin with device address 8 */
+void send(byte volume, const int files[], byte size) {
+  Wire.beginTransmission(DEVICE_ADDRESS);
 
   Wire.write(0xFF);
   Wire.write(volume);
   Wire.write(size);
   for (int i = 0; i < size; i++) {
-    int id = buffer[i];
+    int id = files[i];
     Serial.print("Sending #"); Serial.println(id);
-    const unsigned char high = ((id >> 7) & 0x7f) | 0x80;
-    const unsigned char low  = (id & 0x7f);
+    const byte high = ((id >> 7) & 0x7f) | 0x80;
+    const byte low  = (id & 0x7f);
 
     Wire.write(low);
     Wire.write(high);
   }
 
-  Wire.endTransmission();    /* stop transmitting */
+  Wire.endTransmission();
 }
 
 void wifiConnect() {
@@ -110,21 +111,21 @@ void handleUpdate(byte * payload) {
 
   JsonObject& d = root["d"];
 
-  int volume = 30;
+  byte volume = 30;
   if (d.containsKey("VOLUME")) {
     volume = d["VOLUME"];
   }
 
   if (d.containsKey("FILES")) {
-    int buffer[10];
+    int files[10];
 
-    JsonArray& files = d["FILES"];
-    int size = files.size();
+    JsonArray& filesArray = d["FILES"];
+    byte size = filesArray.size();
     int j = 0;
     for (int i = size - 1; i >= 0; i--) {
-      buffer[j++] = files.get<int>(i);
+      files[j++] = filesArray.get<int>(i);
     }
-    send(volume, buffer, size);
+    send(volume, files, size);
   }
 }
 

@@ -5,18 +5,18 @@
 
 #define DEVICE_TYPE "PulseCounter"
 
-char server[] = ORG ".messaging.internetofthings.ibmcloud.com";
+char server[] = "myhomeat.cloud";
 char authMethod[] = "use-token-auth";
 char token[] = TOKEN;
-char clientId[] = "d:" ORG ":" DEVICE_TYPE ":" DEVICE_ID;
-const char publishTopic[] = "iot-2/evt/status/fmt/json";
+char clientId[] = "d:" DEVICE_TYPE ":" DEVICE_ID;
+const char publishTopic[] = "events/" DEVICE_TYPE "/" DEVICE_ID;
 
 WiFiClient wifiClient;
 PubSubClient client(server, 1883, wifiClient);
 
 const int led_pin = D1;
 
-const int numReadings = 20;
+const int numReadings = 30;
 int readings[numReadings];      // the readings from the analog input
 int readIndex = 0;              // the index of the current reading
 int total = 0;                  // the running total

@@ -17,12 +17,12 @@
 #define DEBUG true
 
 // watson iot stuff
-const char publishTopic[] = "iot-2/evt/status/fmt/json";          // publish measurements here
-const char updateTopic[] = "iot-2/cmd/update/fmt/json";           // subscribe for update command
-const char server[] = ORG ".messaging.internetofthings.ibmcloud.com";
+const char publishTopic[] = "events/" DEVICE_TYPE "/" DEVICE_ID;          // publish measurements here
+const char updateTopic[] = "cmd/" DEVICE_TYPE "/" DEVICE_ID;           // subscribe for update command
+const char server[] = "myhomeat.cloud";
 const char authMethod[] = "use-token-auth";
 const char token[] = TOKEN;
-const char clientId[] = "d:" ORG ":" DEVICE_TYPE ":" DEVICE_ID;
+const char clientId[] = "d:" DEVICE_TYPE ":" DEVICE_ID;
 
 WiFiClient wifiClient;
 void myCallback(char* topic, byte* payload, unsigned int payloadLength);
