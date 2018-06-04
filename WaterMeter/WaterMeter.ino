@@ -16,7 +16,7 @@ PubSubClient client(server, 1883, wifiClient);
 
 const int led_pin = D1;
 
-const int numReadings = 30;
+const int numReadings = 20;
 int readings[numReadings];      // the readings from the analog input
 int readIndex = 0;              // the index of the current reading
 int total = 0;                  // the running total
@@ -64,11 +64,14 @@ void loop() {
     }
 
     int delta = maxValue - minValue;
+    int avg = (maxValue + minValue) / 2;
 
     if (delta > 5 && delta < 20) {
       // only count pulses if the delta is between 5 and 20
-      int highThreshold = maxValue - delta * 0.5 + 1;
-      int lowThreshold = highThreshold - 1;
+//      int highThreshold = maxValue - delta * 0.5 + 1;
+//      int lowThreshold = highThreshold - 1;
+      int highThreshold = avg + 1.0;
+      int lowThreshold = avg;
       if (value > highThreshold && signalUp == false) {
         digitalWrite(led_pin, LOW);
         signalUp = true;

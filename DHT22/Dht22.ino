@@ -4,10 +4,10 @@
 #include <DHT.h>
 #include "xCredentials.h"
 
-#define DHTPIN 4     // what digital pin the DHT22 is conected to
+#define DHTPIN D2       // what digital pin the DHT22 is conected to
 #define DHTTYPE DHT22   // there are multiple kinds of DHT sensors
 #define DEVICE_TYPE "DHT22"
-#define JSON_BUFFER_LENGTH 100
+#define JSON_BUFFER_LENGTH 150
 
 const char publishTopic[] = "events/" DEVICE_TYPE "/" DEVICE_ID;
 const char server[] = "myhomeat.cloud";
