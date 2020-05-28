@@ -5,9 +5,9 @@
 #include "xCredentials.h"
 
 #define DEVICE_TYPE "EnergyMeter"
-#define INPUT_BUFFER_LENGTH 500
-#define OUTPUT_BUFFER_LENGTH 500
-#define DEBUG 1
+#define INPUT_BUFFER_LENGTH 230
+#define OUTPUT_BUFFER_LENGTH 300
+#define DEBUG 0
 #define NO_DATA '!'
 
 const char publishTopic[] = "events/" DEVICE_TYPE "/" DEVICE_ID;               // publish events here
@@ -88,10 +88,10 @@ char *readMsg() {
   unsigned short i = 0;
 
   input_buffer[i] = readChar();
-  while(input_buffer[i] != NO_DATA && input_buffer[i] != '\r' && i < INPUT_BUFFER_LENGTH - 1) {
+  while(input_buffer[i] != NO_DATA && input_buffer[i] != '\r' && input_buffer[i] != '\n' && i < INPUT_BUFFER_LENGTH - 1) {
     input_buffer[++i] = readChar();
   }
-  input_buffer[++i] = '\0';
+  input_buffer[i] = '\0';
 
   if (isComplete(input_buffer)) {
     if (DEBUG) {
@@ -108,7 +108,7 @@ bool isComplete(char *pMsg) {
   bool ret = false;
 
   unsigned short len = strlen(pMsg);
-  if (strlen(pMsg) > 10) {
+  if (strlen(pMsg) > 220) {
 //    if (pMsg[0] == '<' && pMsg[1] == 'm' && pMsg[2] == 's' && pMsg[3] == 'g' && pMsg[4] == '>') {
 //      if (pMsg[len - 7] == '<' && pMsg[len - 6] == '/' && pMsg[len - 5] == 'm' && pMsg[len - 4] == 's' && pMsg[len - 3] == 'g' && pMsg[len - 2] == '>') {
         ret = true;
@@ -122,12 +122,12 @@ bool isComplete(char *pMsg) {
 char readChar() {
   unsigned long start = millis();
   while (1) {
-    if (millis() - start > 1000) {
+    if (millis() - start > 5000) {
       break;
     }
-    
+
     if (sws.available() > 0) {
-      char c = (char)sws.read();
+      char c = sws.read();
       return c;
     }
   }

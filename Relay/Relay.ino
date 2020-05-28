@@ -1,10 +1,9 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
-#include <MitsubishiHeatpumpIR.h>
 #include "xCredentials.h"
 
-#define DEVICE_TYPE "Heatpump"
+#define DEVICE_TYPE "Relay"
 #define JSON_BUFFER_LENGTH 500
 #define DEBUG 1
 
@@ -19,16 +18,14 @@ WiFiClient wifiClient;
 void myCallback(char* topic, byte* payload, unsigned int payloadLength);
 PubSubClient client(server, 1883, myCallback, wifiClient);
 
-IRSenderBitBang irSender(4);  // IR led on Wemos D1 mini, connect between D2 and G
-
-MitsubishiFDHeatpumpIR *heatpumpIR = new MitsubishiFDHeatpumpIR();
-
 void setup() {
   Serial.begin(57600);
   delay(1000);
 
   wifiConnect();
   mqttConnect();
+
+  pinMode(5, OUTPUT);
 
   if (DEBUG) {
     Serial.println("Setup done");
@@ -88,40 +85,6 @@ void mqttConnect() {
   }
 }
 
-boolean publishPayload(JsonObject& root) {
-  boolean ret = true;
-
-  if (DEBUG) {
-    Serial.println("Publish payload:"); root.prettyPrintTo(Serial); Serial.println();
-  }
-
-  char buff[JSON_BUFFER_LENGTH];
-  root.printTo(buff, JSON_BUFFER_LENGTH);
-
-  if (client.publish(publishTopic, buff)) {
-    if (DEBUG) {
-      Serial.println("Publish OK");
-    }
-  } else {
-    if (DEBUG) {
-      Serial.println("Publish FAILED");
-    }
-    ret = false;
-  }
-
-  return ret;
-}
-
-boolean publishData(int tyhja) {
-  StaticJsonBuffer<JSON_BUFFER_LENGTH> jsonBuffer;
-  JsonObject& root = jsonBuffer.createObject();
-  JsonObject& d = root.createNestedObject("d");
-
-//  d["module"] = io.getModule();
-
-  return publishPayload(root);
-}
-
 void myCallback(char* topic, byte * payload, unsigned int length) {
   if (DEBUG) {
     Serial.print("Callback invoked for topic: "); Serial.println(topic);
@@ -147,11 +110,17 @@ void handleUpdate(byte * payload) {
 
   JsonObject& d = root["d"];
 
-  uint8_t power = d["power"] == "on" ? POWER_ON : POWER_OFF;
-  uint8_t mode = d["mode"] == "heat" ? MODE_HEAT : MODE_COOL;
-  uint8_t fan = d["fan"];
-  uint8_t temp = d["temp"];
+  if (d.containsKey("cmd")) {
+    String cmd = d["cmd"];
 
-  // Send the IR command
-  heatpumpIR->send(irSender, power, mode, fan, temp, mode == MODE_HEAT ? VDIR_MDOWN : VDIR_UP, HDIR_MIDDLE);
+    if (cmd == "pulse") {
+      pulse();
+    }
+  }
+}
+
+void pulse() {
+  digitalWrite(5, HIGH);
+  delay(500);           
+  digitalWrite(5, LOW); 
 }
