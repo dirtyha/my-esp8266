@@ -13,5 +13,5 @@ This repository contains my ESP8266 based projects. All these are somehow relate
 - SIM808 (2G modem module control via AT commands)
 - TX23 wind direction and speed sensor
 - Vallox library and ValloxDSE application to control Vallox Digit SE ventillation machine
-- Ventillator to control a simple fan (kanavapuhallin) via a cheap wireless power socket controller
+- Ventillator to control a simple fan (kanavapuhallin) connected to a cheapo remotely (433MHz) controlled power socket
 - Water meter to count pulses from a watermeter
