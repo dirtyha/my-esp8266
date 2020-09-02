@@ -4,29 +4,30 @@
 #include <DallasTemperature.h>
 #include <ArduinoJson.h>
 #include <RCSwitch.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
 #include "xCredentials.h"
 
-#define DEVICE_TYPE "Motor"
 #define JSON_BUFFER_LENGTH 150
-#define ONE_WIRE_BUS D5
-#define TX_PIN D2
-#define HALL_PIN D1
+#define ONE_WIRE_BUS 14
+#define TX_PIN 4
+#define HALL_PIN 5
+#define DEBUG 1
 
 #define TX_CMD_OPEN  "FQ0F00Q101011F0F0F0F"
 #define TX_CMD_CLOSE "FQ0F00Q101011F0F0101"
 #define TX_CMD_STOP  "FQ0F00Q101011F0FFFFF"
 
-// watson iot stuff
-const char publishTopic[] = "events/" DEVICE_TYPE "/" DEVICE_ID;          // publish measurements here
-const char updateTopic[] = "cmd/" DEVICE_TYPE "/" DEVICE_ID;           // subscribe for update command
-const char server[] = "myhomeat.cloud";
-const char authMethod[] = "use-token-auth";
-const char token[] = TOKEN;
-const char clientId[] = "d:" DEVICE_TYPE ":" DEVICE_ID;
+const char publishTopic[] = "events/" DEVICE_ID; // publish events here
+const char cmdTopic[] = "cmd/" DEVICE_ID;        // subscribe for commands here
+const char AWS_endpoint[] = AWS_PREFIX ".iot.eu-west-1.amazonaws.com";
+void callback(char* topic, byte* payload, unsigned int payloadLength);
+const char clientId[] = "ESP8266-" DEVICE_ID;
 
-WiFiClient wifiClient;
-void myCallback(char* topic, byte* payload, unsigned int payloadLength);
-PubSubClient client(server, 1883, myCallback, wifiClient);
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org");
+WiFiClientSecure espClient;
+PubSubClient client(AWS_endpoint, 8883, callback, espClient);
 RCSwitch mySwitch = RCSwitch();
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensor(&oneWire);
@@ -34,14 +35,64 @@ unsigned long lastHeartBeat = 0;
 boolean lastIsClosed = true;
 
 void setup() {
-  // initialize serial communication with computer:
-  Serial.begin(57600);
-  delay(2000);
+  Serial.begin(115200);
+  Serial.setDebugOutput(true);
 
-  Serial.println("Setup started");
+  setup_wifi();
+  delay(1000);
+  if (!SPIFFS.begin()) {
+    Serial.println("Failed to mount file system");
+    return;
+  }
 
-  wifiConnect();
-  mqttConnect();
+  Serial.print("Heap: "); Serial.println(ESP.getFreeHeap());
+
+  // Load certificate file
+  File cert = SPIFFS.open("/cert.der", "r");
+  if (!cert) {
+    Serial.println("Failed to open cert file");
+  }
+  else
+    Serial.println("Success to open cert file");
+
+  delay(1000);
+
+  if (espClient.loadCertificate(cert))
+    Serial.println("cert loaded");
+  else
+    Serial.println("cert not loaded");
+
+  // Load private key file
+  File private_key = SPIFFS.open("/private.der", "r");
+  if (!private_key) {
+    Serial.println("Failed to open private cert file");
+  }
+  else
+    Serial.println("Success to open private cert file");
+
+  delay(1000);
+
+  if (espClient.loadPrivateKey(private_key))
+    Serial.println("private key loaded");
+  else
+    Serial.println("private key not loaded");
+
+  // Load CA file
+  File ca = SPIFFS.open("/ca.der", "r");
+  if (!ca) {
+    Serial.println("Failed to open ca ");
+  }
+  else
+    Serial.println("Success to open ca");
+
+  delay(1000);
+
+  if (espClient.loadCACert(ca))
+    Serial.println("ca loaded");
+  else
+    Serial.println("ca failed");
+
+  Serial.print("Heap: "); Serial.println(ESP.getFreeHeap());
 
   // TX setup
   mySwitch.enableTransmit(TX_PIN);
@@ -64,10 +115,10 @@ void loop() {
     isClosed = false;
   }
 
-  // check that we are connected
-  if (!client.loop()) {
-    mqttConnect();
+  if (!client.connected()) {
+    reconnect();
   }
+  client.loop();
 
   if (lastIsClosed != isClosed) {
     float ta = poll();
@@ -85,33 +136,74 @@ void loop() {
 }
 
 void wifiConnect() {
-  Serial.print("Connecting to "); Serial.print(ssid);
+  if (DEBUG) {
+    Serial.print("Connecting to "); Serial.print(ssid);
+  }
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
-    digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
     delay(500);
-    digitalWrite(LED_BUILTIN, LOW);   // turn the LED on (HIGH is the voltage level)
-    Serial.print(".");
+    if (DEBUG) {
+      Serial.print(".");
+    }
   }
   WiFi.mode(WIFI_STA);
-  Serial.print("WiFi connected, IP address: "); Serial.println(WiFi.localIP());
-  digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
+  if (DEBUG) {
+    Serial.print("WiFi connected, IP address: "); Serial.println(WiFi.localIP());
+  }
 }
 
-void mqttConnect() {
-  if (!!!client.connected()) {
-    Serial.print("Reconnecting MQTT client to "); Serial.println(server);
-    int count = 20;
-    while (count-- > 0 && !!!client.connect(clientId, authMethod, token)) {
-      Serial.print(".");
-      delay(500);
-    }
-    Serial.println();
+void setup_wifi() {
 
-    if (client.subscribe(updateTopic, 1)) {
-      Serial.println("Subscribe to update OK");
+  delay(10);
+  // We start by connecting to a WiFi network
+  espClient.setBufferSizes(512, 512);
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  WiFi.mode(WIFI_STA);
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  timeClient.begin();
+  while (!timeClient.update()) {
+    timeClient.forceUpdate();
+  }
+
+  espClient.setX509Time(timeClient.getEpochTime());
+
+}
+
+void reconnect() {
+  // Loop until we're reconnected
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Attempt to connect
+    if (client.connect(clientId)) {
+      Serial.println("connected");
+      // resubscribe
+      client.subscribe(cmdTopic);
     } else {
-      Serial.println("Subscribe to update FAILED");
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+
+      char buf[256];
+      espClient.getLastSSLError(buf, 256);
+      Serial.print("WiFiClientSecure SSL error: ");
+      Serial.println(buf);
+
+      // Wait 5 seconds before retrying
+      delay(5000);
     }
   }
 }
@@ -170,7 +262,7 @@ void closeIt() {
   mySwitch.sendQuadState(TX_CMD_CLOSE);
 }
 
-void myCallback(char* topic, byte * payload, unsigned int length) {
+void callback(char* topic, byte * payload, unsigned int length) {
   Serial.print("Callback invoked for topic: "); Serial.println(topic);
 
   if (strcmp (updateTopic, topic) == 0) {
