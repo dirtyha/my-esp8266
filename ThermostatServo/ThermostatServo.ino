@@ -10,10 +10,11 @@
 #define OUTPUT_BUFFER_LENGTH 300
 #define DEBUG 1
 
-const char publishTopic[] = "events"; // publish events here
-const char cmdTopic[] = "cmd";        // subscribe for commands here
+const char publishTopic[] = "events/" DEVICE_ID; // publish events here
+const char cmdTopic[] = "cmd/" DEVICE_ID;        // subscribe for commands here
 const char AWS_endpoint[] = AWS_PREFIX ".iot.eu-west-1.amazonaws.com";
 void callback(char* topic, byte* payload, unsigned int payloadLength);
+const char clientId[] = "ESP8266-" DEVICE_ID;
 
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org");
@@ -154,7 +155,7 @@ void reconnect() {
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
     // Attempt to connect
-    if (client.connect("ESPthing")) {
+    if (client.connect(clientId)) {
       Serial.println("connected");
       // resubscribe
       client.subscribe(cmdTopic);

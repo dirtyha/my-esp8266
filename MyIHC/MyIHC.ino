@@ -8,14 +8,18 @@
 #include "IHCConfig.h"
 #include "xCredentials.h"
 
-#define JSON_BUFFER_LENGTH 500
+#define OUTPUT_BUFFER_LENGTH 500
+#define INPUT_BUFFER_LENGTH 300
 #define DEBUG 1
 #define DEBUG_IHC 0
 
-const char publishTopic[] = "events"; // publish events here
-const char cmdTopic[] = "cmd";        // subscribe for commands here
+const char publishTopic[] = "events/" DEVICE_ID; // publish events here
+const char cmdTopic[] = "cmd/" DEVICE_ID;        // subscribe for commands here
 const char AWS_endpoint[] = AWS_PREFIX ".iot.eu-west-1.amazonaws.com";
 void callback(char* topic, byte* payload, unsigned int payloadLength);
+char output_buffer[OUTPUT_BUFFER_LENGTH];
+const char clientId[] = "ESP8266-" DEVICE_ID;
+
 
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org");
@@ -108,15 +112,25 @@ void loop() {
   }
 
   IHCRS485Packet *packet = ihc.receive();
-  if (packet != NULL && packet->getDataType() == IHCDefs::OUTP_STATE) {
-    unsigned long changeId = updateStates(packet->getData());
-    if (changeId > 0) {
-      for (int i = 0; i < SIZE; i++) {
-        IHCIO io = ios[i];
-        if (io.getChangeId() == changeId) {
-          publishData(io);
+  if (packet != NULL) {
+    switch (packet->getDataType()) {
+      case IHCDefs::OUTP_STATE:
+        {
+          unsigned long changeId = updateStates(packet->getData());
+          if (changeId > 0) {
+            for (int i = 0; i < SIZE; i++) {
+              IHCIO io = ios[i];
+              if (io.getChangeId() == changeId) {
+                publishData(io);
+              }
+            }
+          }
         }
-      }
+        break;
+
+      default:
+//        publishMystery(packet->getDataType());
+        ;
     }
   }
 }
@@ -174,7 +188,7 @@ void reconnect() {
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
     // Attempt to connect
-    if (client.connect("ESPthing")) {
+    if (client.connect(clientId)) {
       Serial.println("connected");
       // resubscribe
       client.subscribe(cmdTopic);
@@ -201,10 +215,9 @@ boolean publishPayload(JsonObject& root) {
     Serial.println("Publish payload:"); root.prettyPrintTo(Serial); Serial.println();
   }
 
-  char buff[JSON_BUFFER_LENGTH];
-  root.printTo(buff, JSON_BUFFER_LENGTH);
+  root.printTo(output_buffer, OUTPUT_BUFFER_LENGTH);
 
-  if (client.publish(publishTopic, buff)) {
+  if (client.publish(publishTopic, output_buffer)) {
     if (DEBUG) {
       Serial.println("Publish OK");
     }
@@ -219,7 +232,7 @@ boolean publishPayload(JsonObject& root) {
 }
 
 boolean publishData(IHCIO & io) {
-  StaticJsonBuffer<JSON_BUFFER_LENGTH> jsonBuffer;
+  StaticJsonBuffer<OUTPUT_BUFFER_LENGTH> jsonBuffer;
   JsonObject& root = jsonBuffer.createObject();
   JsonObject& d = root.createNestedObject("d");
 
@@ -235,7 +248,7 @@ boolean publishData(IHCIO & io) {
 boolean publishStatus(int status) {
   boolean ret = true;
 
-  StaticJsonBuffer<JSON_BUFFER_LENGTH> jsonBuffer;
+  StaticJsonBuffer<OUTPUT_BUFFER_LENGTH> jsonBuffer;
   JsonObject& root = jsonBuffer.createObject();
   JsonObject& d = root.createNestedObject("d");
 
@@ -255,7 +268,7 @@ void callback(char* topic, byte * payload, unsigned int length) {
 }
 
 void handleUpdate(byte * payload) {
-  StaticJsonBuffer<JSON_BUFFER_LENGTH> jsonBuffer;
+  StaticJsonBuffer<INPUT_BUFFER_LENGTH> jsonBuffer;
   JsonObject& root = jsonBuffer.parseObject((char*)payload);
   if (!root.success()) {
     if (DEBUG) {
