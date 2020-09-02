@@ -127,6 +127,7 @@ void handleUpdate(byte * payload) {
     } else if (cmd == "set") {
       int temp = d["temp"];
       myservo.write(temp2angle(temp));
+      publish(angle2temp(myservo.read()));
     }
   }
 }
