@@ -3,7 +3,7 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <ArduinoJson.h>
-#include <RCSwitch.h>
+#include <RCSwitchCustom.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 #include "xCredentials.h"
@@ -28,7 +28,7 @@ WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org");
 WiFiClientSecure espClient;
 PubSubClient client(AWS_endpoint, 8883, callback, espClient);
-RCSwitch mySwitch = RCSwitch();
+CRCSwitch mySwitch = CRCSwitch();
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensor(&oneWire);
 unsigned long lastHeartBeat = 0;
@@ -265,7 +265,7 @@ void closeIt() {
 void callback(char* topic, byte * payload, unsigned int length) {
   Serial.print("Callback invoked for topic: "); Serial.println(topic);
 
-  if (strcmp (updateTopic, topic) == 0) {
+  if (strcmp (cmdTopic, topic) == 0) {
     handleUpdate(payload);
   }
 }
