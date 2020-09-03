@@ -135,23 +135,6 @@ void loop() {
   }
 }
 
-void wifiConnect() {
-  if (DEBUG) {
-    Serial.print("Connecting to "); Serial.print(ssid);
-  }
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    if (DEBUG) {
-      Serial.print(".");
-    }
-  }
-  WiFi.mode(WIFI_STA);
-  if (DEBUG) {
-    Serial.print("WiFi connected, IP address: "); Serial.println(WiFi.localIP());
-  }
-}
-
 void setup_wifi() {
 
   delay(10);

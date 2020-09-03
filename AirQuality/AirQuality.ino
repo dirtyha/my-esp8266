@@ -2,26 +2,28 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <SDS011.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
 #include "xCredentials.h"
 
-#define DEVICE_TYPE "SDS011"
 #define JSON_BUFFER_LENGTH 100
+#define DEBUG 1
 
 float pm10, pm10_sum;
 int pm10_count;
 float pm25, pm25_sum;
 int pm25_count;
 
-const char publishTopic[] = "events/" DEVICE_TYPE "/" DEVICE_ID;
-char server[] = "myhomeat.cloud";
-char authMethod[] = "use-token-auth";
-char token[] = TOKEN;
-char clientId[] = "d:" DEVICE_TYPE ":" DEVICE_ID;
+const char publishTopic[] = "events/" DEVICE_ID; // publish events here
+const char AWS_endpoint[] = AWS_PREFIX ".iot.eu-west-1.amazonaws.com";
+const char clientId[] = "ESP8266-" DEVICE_ID;
 
-WiFiClient wifiClient;
-PubSubClient client(server, 1883, wifiClient);
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org");
+WiFiClientSecure espClient;
+PubSubClient client(AWS_endpoint, 8883, espClient);
 SDS011 sds;
-const int led_pin = D3;
+const int led_pin = 0;
 
 unsigned long lastAwake = 0;
 unsigned long lastCheck = 0;
@@ -29,20 +31,80 @@ boolean isAwake = false;
 boolean isReady = false;
 
 void setup() {
-  sds.begin(D1, D2);
-  Serial.begin(9600);
+  Serial.begin(115200);
+  Serial.setDebugOutput(true);
+
+  setup_wifi();
+  delay(1000);
+  if (!SPIFFS.begin()) {
+    Serial.println("Failed to mount file system");
+    return;
+  }
+
+  Serial.print("Heap: "); Serial.println(ESP.getFreeHeap());
+
+  // Load certificate file
+  File cert = SPIFFS.open("/cert.der", "r");
+  if (!cert) {
+    Serial.println("Failed to open cert file");
+  }
+  else
+    Serial.println("Success to open cert file");
+
+  delay(1000);
+
+  if (espClient.loadCertificate(cert))
+    Serial.println("cert loaded");
+  else
+    Serial.println("cert not loaded");
+
+  // Load private key file
+  File private_key = SPIFFS.open("/private.der", "r");
+  if (!private_key) {
+    Serial.println("Failed to open private cert file");
+  }
+  else
+    Serial.println("Success to open private cert file");
+
+  delay(1000);
+
+  if (espClient.loadPrivateKey(private_key))
+    Serial.println("private key loaded");
+  else
+    Serial.println("private key not loaded");
+
+  // Load CA file
+  File ca = SPIFFS.open("/ca.der", "r");
+  if (!ca) {
+    Serial.println("Failed to open ca ");
+  }
+  else
+    Serial.println("Success to open ca");
+
+  delay(1000);
+
+  if (espClient.loadCACert(ca))
+    Serial.println("ca loaded");
+  else
+    Serial.println("ca failed");
+
+  Serial.print("Heap: "); Serial.println(ESP.getFreeHeap());
+
+  sds.begin(5, 4);
 
   pinMode(led_pin, OUTPUT);
   digitalWrite(led_pin, LOW);
-
-  wifiConnect();
-  mqttConnect();
 
   sleepSds();
   Serial.println("Setup done.");
 }
 
 void loop() {
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
+
   unsigned long now = millis();
 
   if (!isAwake && (now - lastAwake > 8.5 * 60 * 1000)) {
@@ -59,10 +121,6 @@ void loop() {
     isReady = false;
     sleepSds();
     digitalWrite(led_pin, LOW);
-
-    if (!client.loop()) {
-      mqttConnect();
-    }
 
     if (publishData()) {
       pm10_sum = 0.0;
@@ -90,26 +148,57 @@ void loop() {
   }
 }
 
-void wifiConnect() {
-  Serial.print("Connecting to "); Serial.print(ssid);
+void setup_wifi() {
+
+  delay(10);
+  // We start by connecting to a WiFi network
+  espClient.setBufferSizes(512, 512);
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+
   WiFi.begin(ssid, password);
+
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
+
   WiFi.mode(WIFI_STA);
-  Serial.print("WiFi connected, IP address: "); Serial.println(WiFi.localIP());
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  timeClient.begin();
+  while (!timeClient.update()) {
+    timeClient.forceUpdate();
+  }
+
+  espClient.setX509Time(timeClient.getEpochTime());
+
 }
 
-void mqttConnect() {
-  if (!!!client.connected()) {
-    Serial.print("Reconnecting MQTT client to "); Serial.println(server);
-    int tryCount = 60;
-    while (!!!client.connect(clientId, authMethod, token) && --tryCount > 0) {
-      Serial.print(".");
-      delay(500);
+void reconnect() {
+  // Loop until we're reconnected
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Attempt to connect
+    if (client.connect(clientId)) {
+      Serial.println("connected");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+
+      char buf[256];
+      espClient.getLastSSLError(buf, 256);
+      Serial.print("WiFiClientSecure SSL error: ");
+      Serial.println(buf);
+
+      // Wait 5 seconds before retrying
+      delay(5000);
     }
-    Serial.println();
   }
 }
 
@@ -150,5 +239,3 @@ void wakeupSds() {
   isAwake = true;
   Serial.println("SDS011 is awake.");
 }
-
-

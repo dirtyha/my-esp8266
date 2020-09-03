@@ -1,54 +1,106 @@
 // Vallox Digit SE monitoring and control for ESP8266
 // requires RS485 serial line adapter between ESP8266 <-> DigitSE
-// and account in Watson IoT platform
 // NOTE: MQTT message size is over 128 bytes. 
 // You must increase MQTT_MAX_PACKET_SIZE to 256 in PubSubClient.h
 
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
 #include <Vallox.h>
-// you must create your own xCredentials.h for Watson IoT and WiFi: 
-// ORG, DEVICE_ID, TOKEN, ssid and password
 #include "xCredentials.h" 
 
-#define DEVICE_TYPE "VentillationMachine"
 #define JSON_BUFFER_LENGTH 350
-#define DEBUG true
+#define DEBUG 1
 
-// watson iot stuff
-const char publishTopic[] = "events/" DEVICE_TYPE "/" DEVICE_ID;          // publish measurements here
-const char updateTopic[] = "cmd/" DEVICE_TYPE "/" DEVICE_ID;           // subscribe for update command
-const char server[] = "myhomeat.cloud";
-const char authMethod[] = "use-token-auth";
-const char token[] = TOKEN;
-const char clientId[] = "d:" DEVICE_TYPE ":" DEVICE_ID;
+const char publishTopic[] = "events/" DEVICE_ID; // publish events here
+const char cmdTopic[] = "cmd/" DEVICE_ID;        // subscribe for commands here
+const char AWS_endpoint[] = AWS_PREFIX ".iot.eu-west-1.amazonaws.com";
+void callback(char* topic, byte* payload, unsigned int payloadLength);
+const char clientId[] = "ESP8266-" DEVICE_ID;
 
-WiFiClient wifiClient;
-void myCallback(char* topic, byte* payload, unsigned int payloadLength);
-PubSubClient client(server, 1883, myCallback, wifiClient);
-Vallox vx(D1, D2, DEBUG);
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org");
+WiFiClientSecure espClient;
+PubSubClient client(AWS_endpoint, 8883, callback, espClient);
+Vallox vx(5, 4, DEBUG);
 unsigned long lastUpdated = 0;
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
+  Serial.setDebugOutput(true);
 
-  wifiConnect();
+  setup_wifi();
+  delay(1000);
+  if (!SPIFFS.begin()) {
+    Serial.println("Failed to mount file system");
+    return;
+  }
+
+  Serial.print("Heap: "); Serial.println(ESP.getFreeHeap());
+
+  // Load certificate file
+  File cert = SPIFFS.open("/cert.der", "r");
+  if (!cert) {
+    Serial.println("Failed to open cert file");
+  }
+  else
+    Serial.println("Success to open cert file");
+
+  delay(1000);
+
+  if (espClient.loadCertificate(cert))
+    Serial.println("cert loaded");
+  else
+    Serial.println("cert not loaded");
+
+  // Load private key file
+  File private_key = SPIFFS.open("/private.der", "r");
+  if (!private_key) {
+    Serial.println("Failed to open private cert file");
+  }
+  else
+    Serial.println("Success to open private cert file");
+
+  delay(1000);
+
+  if (espClient.loadPrivateKey(private_key))
+    Serial.println("private key loaded");
+  else
+    Serial.println("private key not loaded");
+
+  // Load CA file
+  File ca = SPIFFS.open("/ca.der", "r");
+  if (!ca) {
+    Serial.println("Failed to open ca ");
+  }
+  else
+    Serial.println("Success to open ca");
+
+  delay(1000);
+
+  if (espClient.loadCACert(ca))
+    Serial.println("ca loaded");
+  else
+    Serial.println("ca failed");
+
+  Serial.print("Heap: "); Serial.println(ESP.getFreeHeap());
+
   vx.init();
-  mqttConnect();
-
+  
   Serial.println("Setup done");
 }
 
 void loop() {
 
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
+
   // loop VX messages
   vx.loop();
-
-  // check that we are connected
-  if (!client.loop()) {
-    mqttConnect();
-  }
 
   unsigned long newUpdate = vx.getUpdated();
   if (lastUpdated != newUpdate) {
@@ -59,33 +111,58 @@ void loop() {
   }
 }
 
-void wifiConnect() {
-  Serial.print("Connecting to "); Serial.print(ssid);
+void setup_wifi() {
+
+  delay(10);
+  // We start by connecting to a WiFi network
+  espClient.setBufferSizes(512, 512);
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+
   WiFi.begin(ssid, password);
+
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
+
   WiFi.mode(WIFI_STA);
-  Serial.print("WiFi connected, IP address: "); Serial.println(WiFi.localIP());
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  timeClient.begin();
+  while (!timeClient.update()) {
+    timeClient.forceUpdate();
+  }
+
+  espClient.setX509Time(timeClient.getEpochTime());
+
 }
 
-void mqttConnect() {
-  if (!!!client.connected()) {
-    Serial.print("Reconnecting MQTT client to "); Serial.println(server);
-    int count = 20;
-    while (count-- > 0 && !!!client.connect(clientId, authMethod, token)) {
-      Serial.print(".");
-      delay(500);
-    }
-    Serial.println();
-
-    if (client.subscribe(updateTopic, 1)) {
-      if (DEBUG) {
-        Serial.println("Subscribe to update OK");
-      }
+void reconnect() {
+  // Loop until we're reconnected
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Attempt to connect
+    if (client.connect(clientId)) {
+      Serial.println("connected");
+      // resubscribe
+      client.subscribe(cmdTopic);
     } else {
-      Serial.println("Subscribe to update FAILED");
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+
+      char buf[256];
+      espClient.getLastSSLError(buf, 256);
+      Serial.print("WiFiClientSecure SSL error: ");
+      Serial.println(buf);
+
+      // Wait 5 seconds before retrying
+      delay(5000);
     }
   }
 }
@@ -134,12 +211,12 @@ boolean publishData() {
   return ret;
 }
 
-void myCallback(char* topic, byte * payload, unsigned int length) {
+void callback(char* topic, byte * payload, unsigned int length) {
   if (DEBUG) {
     Serial.print("Callback invoked for topic: "); Serial.println(topic);
   }
 
-  if (strcmp (updateTopic, topic) == 0) {
+  if (strcmp (cmdTopic, topic) == 0) {
     handleUpdate(payload);
   }
 }
@@ -198,5 +275,3 @@ void handleUpdate(byte * payload) {
     vx.setServiceCounter(sc);
   }
 }
-
-
