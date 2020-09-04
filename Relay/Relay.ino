@@ -1,29 +1,83 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
 #include "xCredentials.h"
 
-#define DEVICE_TYPE "Relay"
-#define JSON_BUFFER_LENGTH 500
+#define JSON_BUFFER_LENGTH 150
 #define DEBUG 1
 
-const char publishTopic[] = "events/" DEVICE_TYPE "/" DEVICE_ID;               // publish events here
-const char cmdTopic[] = "cmd/" DEVICE_TYPE "/" DEVICE_ID;             // subscribe for commands here
-const char server[] = "myhomeat.cloud";
-const char authMethod[] = "use-token-auth";
-const char token[] = TOKEN;
-const char clientId[] = "d:" DEVICE_TYPE ":" DEVICE_ID;
+const char publishTopic[] = "events/" DEVICE_ID; // publish events here
+const char cmdTopic[] = "cmd/" DEVICE_ID;        // subscribe for commands here
+const char AWS_endpoint[] = AWS_PREFIX ".iot.eu-west-1.amazonaws.com";
+void callback(char* topic, byte* payload, unsigned int payloadLength);
+const char clientId[] = "ESP8266-" DEVICE_ID;
 
-WiFiClient wifiClient;
-void myCallback(char* topic, byte* payload, unsigned int payloadLength);
-PubSubClient client(server, 1883, myCallback, wifiClient);
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org");
+WiFiClientSecure espClient;
+PubSubClient client(AWS_endpoint, 8883, callback, espClient);
 
 void setup() {
-  Serial.begin(57600);
+  Serial.begin(115200);
+  Serial.setDebugOutput(true);
+
+  setup_wifi();
+  delay(1000);
+  if (!SPIFFS.begin()) {
+    Serial.println("Failed to mount file system");
+    return;
+  }
+
+  Serial.print("Heap: "); Serial.println(ESP.getFreeHeap());
+
+  // Load certificate file
+  File cert = SPIFFS.open("/cert.der", "r");
+  if (!cert) {
+    Serial.println("Failed to open cert file");
+  }
+  else
+    Serial.println("Success to open cert file");
+
   delay(1000);
 
-  wifiConnect();
-  mqttConnect();
+  if (espClient.loadCertificate(cert))
+    Serial.println("cert loaded");
+  else
+    Serial.println("cert not loaded");
+
+  // Load private key file
+  File private_key = SPIFFS.open("/private.der", "r");
+  if (!private_key) {
+    Serial.println("Failed to open private cert file");
+  }
+  else
+    Serial.println("Success to open private cert file");
+
+  delay(1000);
+
+  if (espClient.loadPrivateKey(private_key))
+    Serial.println("private key loaded");
+  else
+    Serial.println("private key not loaded");
+
+  // Load CA file
+  File ca = SPIFFS.open("/ca.der", "r");
+  if (!ca) {
+    Serial.println("Failed to open ca ");
+  }
+  else
+    Serial.println("Success to open ca");
+
+  delay(1000);
+
+  if (espClient.loadCACert(ca))
+    Serial.println("ca loaded");
+  else
+    Serial.println("ca failed");
+
+  Serial.print("Heap: "); Serial.println(ESP.getFreeHeap());
 
   pinMode(5, OUTPUT);
 
@@ -33,59 +87,69 @@ void setup() {
 }
 
 void loop() {
-
-  // check that we are connected
-  if (!client.loop()) {
-    mqttConnect();
+  if (!client.connected()) {
+    reconnect();
   }
+  client.loop();
 }
 
-void wifiConnect() {
-  if (DEBUG) {
-    Serial.print("Connecting to "); Serial.print(ssid);
-  }
+void setup_wifi() {
+
+  delay(10);
+  // We start by connecting to a WiFi network
+  espClient.setBufferSizes(512, 512);
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+
   WiFi.begin(ssid, password);
+
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    if (DEBUG) {
-      Serial.print(".");
-    }
+    Serial.print(".");
   }
+
   WiFi.mode(WIFI_STA);
-  if (DEBUG) {
-    Serial.print("WiFi connected, IP address: "); Serial.println(WiFi.localIP());
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  timeClient.begin();
+  while (!timeClient.update()) {
+    timeClient.forceUpdate();
   }
+
+  espClient.setX509Time(timeClient.getEpochTime());
+
 }
 
-void mqttConnect() {
-  if (!!!client.connected()) {
-    if (DEBUG) {
-      Serial.print("Reconnecting MQTT client to "); Serial.println(server);
-    }
-    int count = 20;
-    while (count-- > 0 && !!!client.connect(clientId, authMethod, token)) {
-      if (DEBUG) {
-        Serial.print(".");
-      }
-      delay(500);
-    }
-    if (DEBUG) {
-      Serial.println();
-    }
-
-    if (client.subscribe(cmdTopic, 1)) {
-      if (DEBUG) {
-        Serial.println("Subscribe to update OK");
-      }
+void reconnect() {
+  // Loop until we're reconnected
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Attempt to connect
+    if (client.connect(clientId)) {
+      Serial.println("connected");
+      // resubscribe
+      client.subscribe(cmdTopic);
     } else {
-      if (DEBUG) {
-        Serial.println("Subscribe to update FAILED");
-      }
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+
+      char buf[256];
+      espClient.getLastSSLError(buf, 256);
+      Serial.print("WiFiClientSecure SSL error: ");
+      Serial.println(buf);
+
+      // Wait 5 seconds before retrying
+      delay(5000);
     }
   }
 }
 
-void myCallback(char* topic, byte * payload, unsigned int length) {
+void callback(char* topic, byte * payload, unsigned int length) {
   if (DEBUG) {
     Serial.print("Callback invoked for topic: "); Serial.println(topic);
   }
