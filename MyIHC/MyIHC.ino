@@ -20,7 +20,6 @@ void callback(char* topic, byte* payload, unsigned int payloadLength);
 char output_buffer[OUTPUT_BUFFER_LENGTH];
 const char clientId[] = "ESP8266-" DEVICE_ID;
 
-
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org");
 WiFiClientSecure espClient;
@@ -129,26 +128,8 @@ void loop() {
         break;
 
       default:
-//        publishMystery(packet->getDataType());
         ;
     }
-  }
-}
-
-void wifiConnect() {
-  if (DEBUG) {
-    Serial.print("Connecting to "); Serial.print(ssid);
-  }
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    if (DEBUG) {
-      Serial.print(".");
-    }
-  }
-  WiFi.mode(WIFI_STA);
-  if (DEBUG) {
-    Serial.print("WiFi connected, IP address: "); Serial.println(WiFi.localIP());
   }
 }
 
