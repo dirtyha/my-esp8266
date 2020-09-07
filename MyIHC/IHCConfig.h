@@ -13,6 +13,7 @@ Vector<byte> data;
 IHCIO kitchenStove("hella", 1, 1);
 IHCIO porch("kuisti", 1, 2);
 IHCIO entry("tuulikaappi", 1, 3);
+IHCIO boiler("KV varaaja", 1, 4);
 IHCIO hall("AK halli", 1, 5);
 IHCIO bay("erkkeri", 1, 6);
 IHCIO hallCeilingSocket("AK hallin KPR", 1, 8);
@@ -54,6 +55,7 @@ IHCIO ios[] = {
   kitchenStove,
   porch,
   entry,
+  boiler,
   hall,
   bay,
   hallCeilingSocket,
