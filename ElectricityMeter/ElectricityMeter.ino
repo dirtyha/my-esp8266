@@ -47,9 +47,11 @@ void loop() {
   unsigned long now = millis();
   if (now - lastReported > 10000) {
     lastReported = now;
-    Serial.print("Watts:");Serial.println(currentWatt);
-    publishData();
-    reset();
+    if (counter > 0) {
+      Serial.print("Watts:");Serial.println(currentWatt);
+      publishData();
+      reset();
+    }
   }
 }
 
