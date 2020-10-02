@@ -1,13 +1,11 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
-#include <SoftwareSerial.h>
 #include <ArduinoJson.h>
 #include "xCredentials.h"
 
 #define DEVICE_TYPE "EnergyMeter"
 #define INPUT_BUFFER_LENGTH 230
 #define OUTPUT_BUFFER_LENGTH 300
-#define DEBUG 0
 #define NO_DATA '!'
 
 const char publishTopic[] = "events/" DEVICE_TYPE "/" DEVICE_ID;               // publish events here
@@ -18,22 +16,16 @@ const char clientId[] = "d:" DEVICE_TYPE ":" DEVICE_ID;
 
 WiFiClient wifiClient;
 PubSubClient client(server, 1883, wifiClient);
-SoftwareSerial sws(5, 0, true);
 char input_buffer[INPUT_BUFFER_LENGTH];
 char output_buffer[OUTPUT_BUFFER_LENGTH];
 
 void setup() {
   Serial.begin(57600);
-  delay(1000);
+  U0C0 = BIT(UCRXI) | BIT(UCBN) | BIT(UCBN+1) | BIT(UCSBN); // Inverse RX
 
   wifiConnect();
   mqttConnect();
 
-  sws.begin(57600);
-
-  if (DEBUG) {
-    Serial.println("Setup done");
-  }
 }
 
 void loop() {
@@ -50,36 +42,18 @@ void loop() {
 }
 
 void wifiConnect() {
-  if (DEBUG) {
-    Serial.print("Connecting to "); Serial.print(ssid);
-  }
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    if (DEBUG) {
-      Serial.print(".");
-    }
   }
   WiFi.mode(WIFI_STA);
-  if (DEBUG) {
-    Serial.print("WiFi connected, IP address: "); Serial.println(WiFi.localIP());
-  }
 }
 
 void mqttConnect() {
   if (!!!client.connected()) {
-    if (DEBUG) {
-      Serial.print("Reconnecting MQTT client to "); Serial.println(server);
-    }
     int count = 20;
     while (count-- > 0 && !!!client.connect(clientId, authMethod, token)) {
-      if (DEBUG) {
-        Serial.print(".");
-      }
       delay(500);
-    }
-    if (DEBUG) {
-      Serial.println();
     }
   }
 }
@@ -94,10 +68,6 @@ char *readMsg() {
   input_buffer[i] = '\0';
 
   if (isComplete(input_buffer)) {
-    if (DEBUG) {
-      Serial.println(input_buffer);
-    }
-
     return input_buffer;
   }
 
@@ -126,8 +96,8 @@ char readChar() {
       break;
     }
 
-    if (sws.available() > 0) {
-      char c = sws.read();
+    if (Serial.available() > 0) {
+      char c = Serial.read();
       return c;
     }
   }
@@ -138,20 +108,10 @@ char readChar() {
 boolean publishPayload(JsonObject& root) {
   boolean ret = true;
 
-  if (DEBUG) {
-    Serial.println("Publish payload:"); root.prettyPrintTo(Serial); Serial.println();
-  }
-
   root.printTo(output_buffer, OUTPUT_BUFFER_LENGTH);
 
   if (client.publish(publishTopic, output_buffer)) {
-    if (DEBUG) {
-      Serial.println("Publish OK");
-    }
   } else {
-    if (DEBUG) {
-      Serial.println("Publish FAILED");
-    }
     ret = false;
   }
 

@@ -25,6 +25,7 @@ IHCIO kitchenCeilingSocket("keittio KPR", 2, 5);
 IHCIO livingroomCeilingSocket("OH KPR", 2, 6);
 IHCIO socketsDownstairs("AK PR", 3, 2);
 IHCIO stairs("portaat", 3, 3);
+IHCIO ovaali("ovaali", 3, 4);
 IHCIO terrace("terassi", 3, 6);
 IHCIO smallBedroom("pieni lasten MH", 3, 7);
 IHCIO door("ovi", 3, 8);
@@ -67,6 +68,7 @@ IHCIO ios[] = {
   livingroomCeilingSocket,
   socketsDownstairs,
   stairs,
+  ovaali,
   terrace,
   smallBedroom,
   door,
