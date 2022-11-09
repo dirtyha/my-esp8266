@@ -4,6 +4,8 @@
 #include <Servo.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 #include "xCredentials.h"
 
 #define INPUT_BUFFER_LENGTH 300
@@ -21,9 +23,13 @@ NTPClient timeClient(ntpUDP, "pool.ntp.org");
 WiFiClientSecure espClient;
 PubSubClient client(AWS_endpoint, 8883, callback, espClient);
 
+OneWire oneWire(5);
+DallasTemperature sensors(&oneWire);
+
 Servo myservo; //initialize a servo object
 int angle = 0;
 char output_buffer[OUTPUT_BUFFER_LENGTH];
+long last = 0L;
 
 void setup()
 {
@@ -88,7 +94,9 @@ void setup()
 
   myservo.attach(4); // connect the servo at pin D2
   myservo.write(0);
-  
+
+  sensors.begin();
+
   if (DEBUG) {
     Serial.println("Setup done");
   }
@@ -100,6 +108,13 @@ void loop()
     reconnect();
   }
   client.loop();
+
+  long now = millis();
+  if (now > last + 300000) {
+//  if (now > last + 60000) {
+    last = now;
+    publishTemperatures();
+  }
 }
 
 void setup_wifi() {
@@ -254,4 +269,36 @@ int temp2angle(int temp) {
   }
 
   return round((temp - 22.777) * 30.0 / 7.777);
+}
+
+boolean publishTemperatures() {
+  DeviceAddress tempDeviceAddress;
+  float tempC0 = -99.9;
+  float tempC1 = -99.9;
+
+  sensors.requestTemperatures(); // Send the command to get temperatures
+
+  if (sensors.getAddress(tempDeviceAddress, 0)) {
+    Serial.print("Temperature for device 0: ");
+    tempC0 = sensors.getTempC(tempDeviceAddress) + 5.0;
+    Serial.print("Temp C: ");
+    Serial.println(tempC0);
+  }
+
+  if (sensors.getAddress(tempDeviceAddress, 1)) {
+    Serial.print("Temperature for device 1: ");
+    tempC1 = sensors.getTempC(tempDeviceAddress) + 5.0;
+    Serial.print("Temp C: ");
+    Serial.println(tempC1);
+  }
+
+  StaticJsonBuffer<OUTPUT_BUFFER_LENGTH> jsonBuffer;
+  JsonObject& root = jsonBuffer.createObject();
+  JsonObject& d = root.createNestedObject("d");
+
+  d["sensor_0"] = tempC0;
+  d["sensor_1"] = tempC1;
+
+  return publishPayload(root);
+
 }

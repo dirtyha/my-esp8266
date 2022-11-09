@@ -24,7 +24,7 @@ void IHC::init(SoftwareSerial *pSerial, bool debug)
 int IHC::getStatus()
 {
 	unsigned long now = millis();
-	if (now - mLastPolled > 20000)
+	if (now - mLastPolled > 60000)
 	{
 		return -1;
 	}

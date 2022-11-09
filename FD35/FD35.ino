@@ -14,6 +14,7 @@ const char cmdTopic[] = "cmd/" DEVICE_ID;        // subscribe for commands here
 const char AWS_endpoint[] = AWS_PREFIX ".iot.eu-west-1.amazonaws.com";
 void callback(char* topic, byte* payload, unsigned int payloadLength);
 const char clientId[] = "ESP8266-" DEVICE_ID;
+unsigned long lastHeartBeat = 0;
 
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org");
@@ -90,10 +91,18 @@ void setup() {
 }
 
 void loop() {
+  unsigned long now = millis();
+  
   if (!client.connected()) {
     reconnect();
   }
   client.loop();
+
+  if (now - lastHeartBeat > 60000) {
+    if (heartbeat()) {
+      lastHeartBeat = now;
+    }
+  }
 }
 
 void setup_wifi() {
@@ -219,4 +228,14 @@ void handleUpdate(byte * payload) {
   // Send the IR command
   heatpumpIR->send(irSender, power, mode, fan, temp, mode == MODE_HEAT ? VDIR_MDOWN : VDIR_UP, HDIR_MIDDLE);
   publishResponse();
+}
+
+boolean heartbeat() {
+  StaticJsonBuffer<JSON_BUFFER_LENGTH> jsonBuffer;
+  JsonObject& root = jsonBuffer.createObject();
+  JsonObject& d = root.createNestedObject("d");
+
+  d["status"] = "OK";
+
+  return publishPayload(root);
 }

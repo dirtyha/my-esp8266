@@ -27,7 +27,14 @@ PubSubClient client(AWS_endpoint, 8883, callback, espClient);
 SoftwareSerial sws(4, 5);
 IHC ihc;
 IHCRS485Packet sendPacket;
-int oldStatus = 0;
+unsigned long pulse_duration = 0;
+unsigned short pulse_module = 0;
+unsigned short pulse_port = 0;
+unsigned long pulse_on = 0;
+unsigned long pulse_off = 0;
+unsigned short state = 0;
+unsigned long lastHeartBeat = 0;
+int status = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -104,10 +111,30 @@ void loop() {
   client.loop();
 
   ihc.loop();
-  int status = ihc.getStatus();
-  if (oldStatus != status) {
-    oldStatus = status;
-    publishStatus(status);
+
+  unsigned long now = millis();
+  if (state == 1) {
+    if (now - pulse_on > 100) {
+      pulseOff();
+    }
+  }
+
+  if (state == 3) {
+    if (now - pulse_on > pulse_duration) {
+      pulseOff();
+    }
+  }
+
+  if (state == 2) {
+    if (now - pulse_off > 500) {
+      pulseOn();
+    }
+  }
+
+  status = ihc.getStatus();
+  if (now - lastHeartBeat > 10000) {
+    lastHeartBeat = now;
+    publishStatus();
   }
 
   IHCRS485Packet *packet = ihc.receive();
@@ -172,7 +199,7 @@ void reconnect() {
     if (client.connect(clientId)) {
       Serial.println("connected");
       // resubscribe
-      client.subscribe(cmdTopic);
+      client.subscribe(cmdTopic, 1);
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -226,7 +253,7 @@ boolean publishData(IHCIO & io) {
   return publishPayload(root);
 }
 
-boolean publishStatus(int status) {
+boolean publishStatus() {
   boolean ret = true;
 
   StaticJsonBuffer<OUTPUT_BUFFER_LENGTH> jsonBuffer;
@@ -268,7 +295,7 @@ void handleUpdate(byte * payload) {
 
     if (cmd == "status") {
       // Publish status
-      publishStatus(oldStatus);
+      publishStatus();
     } else if (cmd == "data") {
       // Publish data
       for (int i = 0; i < SIZE; i++)
@@ -276,25 +303,54 @@ void handleUpdate(byte * payload) {
         publishData(ios[i]);
       }
     } else if (cmd == "change") {
-      // Change output
-      if (d.containsKey("module")) {
-        unsigned short module = d["module"];
-        if (d.containsKey("port")) {
-          unsigned short port = d["port"];
-          if (d.containsKey("type")) {
-            String type = d["type"];
-            if (type.equals("output")) {
-              if (d.containsKey("state"))
-              {
-                bool state = d["state"];
-                Vector<byte> *pData = changeOutput(module, port, state);
-                sendPacket.setData(IHCDefs::ID_IHC, IHCDefs::SET_OUTPUT, pData);
-                ihc.send(&sendPacket);
-              }
-            }
-          }
-        }
-      }
+      unsigned short module = d["module"];
+      unsigned short port = d["port"];
+      bool state = d["state"];
+      Vector<byte> *pData = changeOutput(module, port, state);
+      sendPacket.setData(IHCDefs::ID_IHC, IHCDefs::SET_OUTPUT, pData);
+      ihc.send(&sendPacket);
+    } else if (cmd == "pulse") {
+      pulse_duration = d["duration"];
+      pulse_module = d["module"];
+      pulse_port = d["port"];
+
+      pulseOn();
     }
   }
+}
+
+void pulseOn() {
+  if (state == 0) {
+    state = 1;
+  }
+
+  if (state == 2) {
+    state = 3;
+  }
+  
+  Vector<byte> *pData = changeOutput(pulse_module, pulse_port, true);
+  sendPacket.setData(IHCDefs::ID_IHC, IHCDefs::SET_OUTPUT, pData);
+  ihc.send(&sendPacket);
+  pulse_on = millis();
+  Serial.print("Pulse ON, state=");Serial.println(state);
+}
+
+void pulseOff() {
+  if (state == 3) {
+    state = 0;
+  }
+
+  if (state == 1) {
+    if (pulse_duration > 0) {
+      state = 2;  
+    } else {
+      state = 0;
+    }
+  }
+
+  Vector<byte> *pData = changeOutput(pulse_module, pulse_port, false);
+  sendPacket.setData(IHCDefs::ID_IHC, IHCDefs::SET_OUTPUT, pData);
+  ihc.send(&sendPacket);
+  pulse_off = millis();
+  Serial.print("Pulse OFF, state=");Serial.println(state);
 }

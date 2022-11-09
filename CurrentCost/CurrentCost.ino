@@ -43,7 +43,11 @@ void loop() {
 
 void wifiConnect() {
   WiFi.begin(ssid, password);
+  unsigned long counter = 0;
   while (WiFi.status() != WL_CONNECTED) {
+    if (counter++ > 100) {
+      ESP.restart();
+    }
     delay(500);
   }
   WiFi.mode(WIFI_STA);
@@ -51,8 +55,11 @@ void wifiConnect() {
 
 void mqttConnect() {
   if (!!!client.connected()) {
-    int count = 20;
-    while (count-- > 0 && !!!client.connect(clientId, authMethod, token)) {
+    unsigned long counter = 0;
+    while (!!!client.connect(clientId, authMethod, token)) {
+      if (counter++ > 100) {
+        ESP.restart();
+      }
       delay(500);
     }
   }
@@ -78,7 +85,7 @@ bool isComplete(char *pMsg) {
   bool ret = false;
 
   unsigned short len = strlen(pMsg);
-  if (strlen(pMsg) > 220) {
+  if (strlen(pMsg) > 100) {
 //    if (pMsg[0] == '<' && pMsg[1] == 'm' && pMsg[2] == 's' && pMsg[3] == 'g' && pMsg[4] == '>') {
 //      if (pMsg[len - 7] == '<' && pMsg[len - 6] == '/' && pMsg[len - 5] == 'm' && pMsg[len - 4] == 's' && pMsg[len - 3] == 'g' && pMsg[len - 2] == '>') {
         ret = true;
